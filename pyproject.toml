@@ -1,0 +1,9 @@
+[project]
+name = "org-context-graph"
+version = "0.1.0"
+description = "Organization context graph for services, repos, runbooks, incidents, and retrieval."
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
