@@ -1,0 +1,46 @@
+{
+  "org_id": "default",
+  "services": [
+    {
+      "id": "backend",
+      "name": "Backend API",
+      "aliases": ["backend", "api", "backend-api"],
+      "owners": ["team-platform"],
+      "repos": ["github.com/acme/backend"],
+      "environments": {
+        "prod": {
+          "runtime": {
+            "provider": "kubernetes",
+            "namespace": "prod",
+            "workload": "backend-api"
+          },
+          "observability": {
+            "metrics": "backend-prod",
+            "errors": "backend-api"
+          },
+          "ci": {
+            "provider": "github_actions",
+            "workflow": "deploy-backend.yml"
+          }
+        },
+        "staging": {
+          "runtime": {
+            "provider": "kubernetes",
+            "namespace": "staging",
+            "workload": "backend-api"
+          },
+          "observability": {
+            "metrics": "backend-staging",
+            "errors": "backend-api-staging"
+          },
+          "ci": {
+            "provider": "github_actions",
+            "workflow": "deploy-backend-staging.yml"
+          }
+        }
+      },
+      "runbooks": ["docs/backend-oncall.md"],
+      "dependencies": ["postgres-main", "redis-cache"]
+    }
+  ]
+}

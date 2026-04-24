@@ -2,8 +2,11 @@
 name = "org-context-graph"
 version = "0.1.0"
 description = "Organization context graph for services, repos, runbooks, incidents, and retrieval."
-requires-python = ">=3.12"
-dependencies = []
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.111",
+  "uvicorn[standard]>=0.30"
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

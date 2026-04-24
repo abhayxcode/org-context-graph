@@ -10,7 +10,7 @@ Standalone service for organization context:
 
 ## Phase 0 Status
 
-This repo is scaffolded for later extraction. Phase 1 local demo uses an in-process mock inside `../claude-tag`.
+This repo now has the first real service boundary for Majdoor. It exposes service resolution from a local JSON service catalog.
 
 Planned stack:
 
@@ -19,9 +19,30 @@ Planned stack:
 - pgvector
 - Redis for jobs/cache
 
-## First API Targets
+## Run
+
+```bash
+PYTHONPATH=src uvicorn org_context_graph.main:app --reload --port 4200
+```
+
+Override catalog path:
+
+```bash
+ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
+  PYTHONPATH=src uvicorn org_context_graph.main:app --port 4200
+```
+
+## APIs
 
 - `GET /healthz`
 - `GET /v1/resolve?q=backend&environment=prod`
 - `GET /v1/services/{service_id}`
 - `POST /v1/ingest/service-catalog`
+
+`POST /v1/ingest/service-catalog` is planned, not implemented yet.
+
+## Test
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests
+```
