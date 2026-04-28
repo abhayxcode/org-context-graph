@@ -7,6 +7,16 @@
       "aliases": ["backend", "api", "backend-api"],
       "owners": ["team-platform"],
       "repos": ["github.com/acme/backend"],
+      "repositories": [
+        {
+          "provider": "github",
+          "host": "github.com",
+          "owner": "acme",
+          "name": "backend",
+          "default_branch": "main",
+          "url": "https://github.com/acme/backend"
+        }
+      ],
       "environments": {
         "prod": {
           "runtime": {

@@ -10,7 +10,7 @@ Standalone service for organization context:
 
 ## Phase 0 Status
 
-This repo now has the first real service boundary for Majdoor. It exposes service resolution from a local JSON service catalog.
+This repo now has the first real service boundary for Majdoor. It exposes service resolution from a local JSON service catalog and returns tool-ready context for downstream Tool Control Plane calls.
 
 Planned stack:
 
@@ -40,6 +40,17 @@ ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
 - `POST /v1/ingest/service-catalog`
 
 `POST /v1/ingest/service-catalog` is planned, not implemented yet.
+
+Resolved responses include `tool_context`:
+
+- service and environment
+- owners
+- primary repository metadata
+- runtime targets
+- observability targets
+- CI metadata
+- runbooks and dependencies
+- `tool_arguments` keyed by Tool Control Plane capability/action, such as `code_host.get_recent_changes`, `ci.get_checks`, and `runtime.get_workload_status`
 
 ## Test
 
