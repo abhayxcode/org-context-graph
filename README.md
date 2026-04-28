@@ -42,9 +42,12 @@ ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
 - `GET /v1/services/{service_id}`
 - `GET /v1/services/{service_id}/environments/{environment}`
 - `POST /v1/ingest/service-catalog`
+- `POST /v1/ingest/service-catalog/yaml`
 - `POST /v1/ingest/incident`
 
 `POST /v1/ingest/service-catalog` validates a service catalog payload and replaces the active catalog only after validation succeeds. When the app is backed by `ORG_CONTEXT_CATALOG_PATH` or the default JSON catalog path, accepted catalog and incident changes are persisted back to that JSON file through the catalog store boundary.
+
+`POST /v1/ingest/service-catalog/yaml` accepts repo-owned YAML. It supports either a full catalog object with `org_id` and `services`, or a single service object with `id`, `name`, `owners`, `repos`, and `environments`. Single-service YAML is wrapped into a catalog using the `org_id` query parameter.
 
 FastAPI response models define the public contract for health, search, service listing, service lookup, environment lookup, service catalog ingest, and service resolution responses. The generated OpenAPI schema includes `CatalogIngestRequest`, `CatalogIngestResponse`, `EnvironmentResponse`, `HealthResponse`, `ResolveResponse`, `SearchResponse`, `SearchResult`, `ServiceListResponse`, `ServiceResponse`, and the nested `ToolContext` model.
 

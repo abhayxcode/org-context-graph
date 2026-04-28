@@ -178,6 +178,77 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(resolved["status"], "resolved")
         self.assertEqual(resolved["service"]["id"], "backend")
 
+    def test_ingest_full_catalog_yaml(self) -> None:
+        ingest_route = _route(self.app, "/v1/ingest/service-catalog/yaml")
+        resolve_route = _route(self.app, "/v1/resolve")
+        payload = """
+org_id: default
+services:
+  - id: payments
+    name: Payments API
+    aliases:
+      - payments
+    owners:
+      - team-payments
+    repos:
+      - github.com/acme/payments
+    environments:
+      prod:
+        runtime:
+          provider: kubernetes
+          namespace: prod
+          workload: payments-api
+"""
+
+        body = _serialized_response(ingest_route, ingest_route.endpoint(payload=payload))
+        resolved = resolve_route.endpoint(q="payments", environment="prod")
+
+        self.assertEqual(body, {"status": "accepted", "org_id": "default", "service_count": 1})
+        self.assertEqual(resolved["status"], "resolved")
+        self.assertEqual(resolved["service"]["id"], "payments")
+        self.assertEqual(self.store.load()["services"][0]["id"], "payments")
+
+    def test_ingest_single_service_yaml(self) -> None:
+        ingest_route = _route(self.app, "/v1/ingest/service-catalog/yaml")
+        payload = """
+id: search
+name: Search API
+aliases:
+  - search
+owners:
+  - team-search
+repos:
+  - github.com/acme/search
+environments:
+  prod:
+    runtime:
+      provider: kubernetes
+      namespace: prod
+      workload: search-api
+"""
+
+        body = _serialized_response(
+            ingest_route,
+            ingest_route.endpoint(payload=payload, org_id="acme"),
+        )
+
+        self.assertEqual(body, {"status": "accepted", "org_id": "acme", "service_count": 1})
+        self.assertEqual(self.store.load()["org_id"], "acme")
+        self.assertEqual(self.store.load()["services"][0]["id"], "search")
+
+    def test_invalid_yaml_ingest_does_not_replace_active_catalog(self) -> None:
+        ingest_route = _route(self.app, "/v1/ingest/service-catalog/yaml")
+        resolve_route = _route(self.app, "/v1/resolve")
+
+        with self.assertRaises(HTTPException) as context:
+            ingest_route.endpoint(payload="- not-a-catalog")
+
+        resolved = resolve_route.endpoint(q="backend", environment="prod")
+        self.assertEqual(context.exception.status_code, 422)
+        self.assertIn("must be an object", context.exception.detail)
+        self.assertEqual(resolved["status"], "resolved")
+        self.assertEqual(self.store.load()["services"][0]["id"], "backend")
+
     def test_ingest_incident_and_find_similar(self) -> None:
         ingest_route = _route(self.app, "/v1/ingest/incident")
         similar_route = _route(self.app, "/v1/incidents/similar")

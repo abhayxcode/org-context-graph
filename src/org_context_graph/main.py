@@ -4,8 +4,9 @@ import os
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 
+from org_context_graph.catalog_loader import CatalogParseError, parse_catalog_yaml
 from org_context_graph.models import (
     CatalogIngestRequest,
     CatalogIngestResponse,
@@ -136,18 +137,25 @@ def create_app(
     def ingest_service_catalog(payload: CatalogIngestRequest) -> dict[str, object]:
         nonlocal catalog
         payload_dict = _model_to_dict(payload)
+        catalog = _replace_catalog(payload_dict, store)
+        return _catalog_ingest_response(catalog)
+
+    @app.post(
+        "/v1/ingest/service-catalog/yaml",
+        response_model=CatalogIngestResponse,
+    )
+    def ingest_service_catalog_yaml(
+        payload: Annotated[str, Body(media_type="application/x-yaml")],
+        org_id: str = "default",
+    ) -> dict[str, object]:
+        nonlocal catalog
         try:
-            next_catalog = ServiceCatalog(payload_dict)
-        except CatalogValidationError as error:
+            payload_dict = parse_catalog_yaml(payload, default_org_id=org_id)
+        except CatalogParseError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
-        store.save(next_catalog.to_dict())
-        catalog = next_catalog
-        return {
-            "status": "accepted",
-            "org_id": catalog.org_id,
-            "service_count": len(catalog.services()),
-        }
+        catalog = _replace_catalog(payload_dict, store)
+        return _catalog_ingest_response(catalog)
 
     @app.post(
         "/v1/ingest/incident",
@@ -215,3 +223,21 @@ def _model_to_dict(model: CatalogIngestRequest | IncidentIngestRequest) -> dict:
     if hasattr(model, "model_dump"):
         return model.model_dump()
     return model.dict()
+
+
+def _replace_catalog(payload: dict, store: CatalogStore) -> ServiceCatalog:
+    try:
+        next_catalog = ServiceCatalog(payload)
+    except CatalogValidationError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+    store.save(next_catalog.to_dict())
+    return next_catalog
+
+
+def _catalog_ingest_response(catalog: ServiceCatalog) -> dict[str, object]:
+    return {
+        "status": "accepted",
+        "org_id": catalog.org_id,
+        "service_count": len(catalog.services()),
+    }

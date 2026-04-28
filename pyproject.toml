@@ -5,6 +5,7 @@ description = "Organization context graph for services, repos, runbooks, inciden
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.111",
+  "pyyaml>=6.0",
   "uvicorn[standard]>=0.30"
 ]
 
