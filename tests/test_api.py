@@ -50,6 +50,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(body["status"], "resolved")
         self.assertEqual(body["environment"], "prod")
         self.assertEqual(body["tool_context"]["repository"]["full_name"], "acme/backend")
+        self.assertEqual(body["tool_context"]["playbooks"][0]["id"], "backend-timeout")
         self.assertEqual(body["tool_context"]["test_commands"], ["npm test"])
         self.assertEqual(body["tool_context"]["suggested_reviewers"], ["team-platform"])
         self.assertEqual(
@@ -79,6 +80,15 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(body["result_count"], 1)
         self.assertEqual(body["results"][0]["service_id"], "backend")
         self.assertEqual(body["results"][0]["reference"], "docs/backend-oncall.md")
+
+    def test_search_returns_playbook_results(self) -> None:
+        route = _route(self.app, "/v1/search")
+        raw_body = route.endpoint(q="timeout", result_type="playbook")
+        body = _serialized_response(route, raw_body)
+
+        self.assertEqual(body["result_count"], 1)
+        self.assertEqual(body["results"][0]["type"], "playbook")
+        self.assertEqual(body["results"][0]["reference"], "backend-timeout")
 
     def test_search_unknown_org(self) -> None:
         route = _route(self.app, "/v1/search")

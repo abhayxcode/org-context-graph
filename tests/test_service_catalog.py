@@ -76,6 +76,13 @@ class ServiceCatalogTest(unittest.TestCase):
         self.assertEqual(tool_context["test_commands"], ["npm test"])
         self.assertEqual(tool_context["suggested_reviewers"], ["team-platform"])
 
+    def test_tool_context_contains_playbooks(self) -> None:
+        result = self.catalog.resolve(org_id="default", query="backend", environment="prod")
+        playbooks = result["tool_context"]["playbooks"]
+
+        self.assertEqual(playbooks[0]["id"], "backend-timeout")
+        self.assertEqual(playbooks[0]["title"], "Backend timeout triage")
+
     def test_primary_repository_uses_structured_repository(self) -> None:
         service = self.catalog.get_service(org_id="default", service_id="backend")
         assert service is not None
@@ -119,6 +126,17 @@ class ServiceCatalogTest(unittest.TestCase):
 
         self.assertEqual(results[0]["type"], "repository")
         self.assertEqual(results[0]["reference"], "https://github.com/acme/backend")
+
+    def test_search_finds_playbooks(self) -> None:
+        results = self.catalog.search(
+            org_id="default",
+            query="timeout",
+            result_type="playbook",
+        )
+
+        self.assertEqual(results[0]["type"], "playbook")
+        self.assertEqual(results[0]["reference"], "backend-timeout")
+        self.assertEqual(results[0]["metadata"]["tags"], ["timeout", "database", "restart"])
 
     def test_search_unknown_org_returns_empty(self) -> None:
         results = self.catalog.search(org_id="missing", query="backend")
@@ -207,6 +225,12 @@ class ServiceCatalogTest(unittest.TestCase):
         service = _valid_service("backend")
         service["test_commands"] = "npm test"
         with self.assertRaisesRegex(CatalogValidationError, "test_commands must be a list"):
+            ServiceCatalog({"org_id": "default", "services": [service]})
+
+    def test_rejects_invalid_playbook(self) -> None:
+        service = _valid_service("backend")
+        service["playbooks"] = [{"id": "timeout"}]
+        with self.assertRaisesRegex(CatalogValidationError, "playbooks\\[0\\].title is required"):
             ServiceCatalog({"org_id": "default", "services": [service]})
 
 def _valid_service(service_id: str) -> dict:

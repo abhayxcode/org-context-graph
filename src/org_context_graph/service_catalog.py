@@ -264,6 +264,28 @@ def _search_service(
     for dependency in service.get("dependencies", []):
         add_result("dependency", str(dependency), str(dependency), [str(dependency), service_name])
 
+    for playbook in service.get("playbooks", []):
+        playbook_id = str(playbook.get("id", ""))
+        title = str(playbook.get("title", playbook_id))
+        summary = str(playbook.get("summary", ""))
+        add_result(
+            "playbook",
+            title,
+            playbook_id,
+            [
+                playbook_id,
+                title,
+                summary,
+                *[str(step) for step in playbook.get("steps", [])],
+                *[str(tag) for tag in playbook.get("tags", [])],
+                service_name,
+            ],
+            {
+                "summary": summary,
+                "tags": playbook.get("tags", []),
+            },
+        )
+
     return results
 
 
@@ -349,6 +371,9 @@ def validate_catalog(catalog: dict[str, Any]) -> None:
             if list_field in service and not isinstance(service.get(list_field), list):
                 errors.append(f"{prefix}.{list_field} must be a list")
 
+        for playbook_index, playbook in enumerate(service.get("playbooks", [])):
+            errors.extend(_validate_playbook(playbook, f"{prefix}.playbooks[{playbook_index}]"))
+
         if not service.get("repositories") and not service.get("repos"):
             errors.append(f"{prefix} must define repositories or repos")
         for repository_index, repository in enumerate(service.get("repositories", [])):
@@ -389,6 +414,20 @@ def _validate_repository(repository: dict[str, Any], prefix: str) -> list[str]:
     return errors
 
 
+def _validate_playbook(playbook: dict[str, Any], prefix: str) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(playbook, dict):
+        return [f"{prefix} must be an object"]
+    if not str(playbook.get("id", "")).strip():
+        errors.append(f"{prefix}.id is required")
+    if not str(playbook.get("title", "")).strip():
+        errors.append(f"{prefix}.title is required")
+    for list_field in ["steps", "tags"]:
+        if list_field in playbook and not isinstance(playbook.get(list_field), list):
+            errors.append(f"{prefix}.{list_field} must be a list")
+    return errors
+
+
 def build_tool_context(
     service: dict[str, Any],
     environment: str,
@@ -410,6 +449,7 @@ def build_tool_context(
         "ci": ci,
         "runbooks": service.get("runbooks", []),
         "dependencies": service.get("dependencies", []),
+        "playbooks": service.get("playbooks", []),
         "build_commands": service.get("build_commands", []),
         "test_commands": service.get("test_commands", []),
         "suggested_reviewers": service.get("suggested_reviewers", service.get("owners", [])),

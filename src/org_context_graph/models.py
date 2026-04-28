@@ -55,6 +55,7 @@ class ToolContext(BaseModel):
     ci: dict[str, Any] = Field(default_factory=dict)
     runbooks: list[str] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list)
+    playbooks: list[dict[str, Any]] = Field(default_factory=list)
     build_commands: list[str] = Field(default_factory=list)
     test_commands: list[str] = Field(default_factory=list)
     suggested_reviewers: list[str] = Field(default_factory=list)
@@ -83,6 +84,7 @@ class ServiceResponse(BaseModel):
     environments: dict[str, dict[str, Any]]
     runbooks: list[str] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list)
+    playbooks: list[dict[str, Any]] = Field(default_factory=list)
     build_commands: list[str] = Field(default_factory=list)
     test_commands: list[str] = Field(default_factory=list)
     suggested_reviewers: list[str] = Field(default_factory=list)

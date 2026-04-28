@@ -10,6 +10,19 @@
       "build_commands": ["npm install", "npm run build"],
       "test_commands": ["npm test"],
       "suggested_reviewers": ["team-platform"],
+      "playbooks": [
+        {
+          "id": "backend-timeout",
+          "title": "Backend timeout triage",
+          "summary": "Check recent deploys, database saturation, and worker restart health.",
+          "steps": [
+            "Check deploy workflow status before runtime changes.",
+            "Inspect postgres-main connection saturation.",
+            "Restart backend-api workers only after approval."
+          ],
+          "tags": ["timeout", "database", "restart"]
+        }
+      ],
       "repositories": [
         {
           "provider": "github",
