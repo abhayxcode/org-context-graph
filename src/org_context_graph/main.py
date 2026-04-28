@@ -9,11 +9,18 @@ from fastapi import FastAPI, HTTPException, Query
 from org_context_graph.models import (
     CatalogIngestRequest,
     CatalogIngestResponse,
+    EnvironmentResponse,
     HealthResponse,
     ResolveResponse,
+    ServiceListResponse,
     ServiceResponse,
 )
-from org_context_graph.service_catalog import CatalogValidationError, ServiceCatalog
+from org_context_graph.service_catalog import (
+    CatalogValidationError,
+    ServiceCatalog,
+    build_tool_context,
+    normalize_environment,
+)
 
 
 def default_catalog_path() -> Path:
@@ -42,6 +49,21 @@ def create_app(catalog_path: str | Path | None = None) -> FastAPI:
         return catalog.resolve(org_id=org_id, query=q, environment=environment)
 
     @app.get(
+        "/v1/services",
+        response_model=ServiceListResponse,
+        response_model_exclude_unset=True,
+    )
+    def list_services(org_id: str = "default") -> dict[str, object]:
+        if org_id != catalog.org_id:
+            raise HTTPException(status_code=404, detail="catalog not found")
+        services = catalog.services()
+        return {
+            "org_id": catalog.org_id,
+            "service_count": len(services),
+            "services": services,
+        }
+
+    @app.get(
         "/v1/services/{service_id}",
         response_model=ServiceResponse,
         response_model_exclude_unset=True,
@@ -51,6 +73,31 @@ def create_app(catalog_path: str | Path | None = None) -> FastAPI:
         if service is None:
             raise HTTPException(status_code=404, detail="service not found")
         return service
+
+    @app.get(
+        "/v1/services/{service_id}/environments/{environment}",
+        response_model=EnvironmentResponse,
+    )
+    def get_environment(
+        service_id: str,
+        environment: str,
+        org_id: str = "default",
+    ) -> dict[str, object]:
+        service = catalog.get_service(org_id=org_id, service_id=service_id)
+        if service is None:
+            raise HTTPException(status_code=404, detail="service not found")
+
+        normalized_environment = normalize_environment(environment)
+        environment_config = service.get("environments", {}).get(normalized_environment)
+        if environment_config is None:
+            raise HTTPException(status_code=404, detail="environment not found")
+
+        return {
+            "service_id": service_id,
+            "environment": normalized_environment,
+            "environment_config": environment_config,
+            "tool_context": build_tool_context(service, normalized_environment, environment_config),
+        }
 
     @app.post(
         "/v1/ingest/service-catalog",

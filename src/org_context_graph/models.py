@@ -61,3 +61,16 @@ class ServiceResponse(BaseModel):
 
     class Config:
         extra = "allow"
+
+
+class ServiceListResponse(BaseModel):
+    org_id: str
+    service_count: int
+    services: list[ServiceResponse]
+
+
+class EnvironmentResponse(BaseModel):
+    service_id: str
+    environment: str
+    environment_config: dict[str, Any]
+    tool_context: ToolContext

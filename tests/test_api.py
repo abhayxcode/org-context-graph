@@ -12,8 +12,10 @@ from org_context_graph.main import create_app
 from org_context_graph.models import (
     CatalogIngestRequest,
     CatalogIngestResponse,
+    EnvironmentResponse,
     HealthResponse,
     ResolveResponse,
+    ServiceListResponse,
     ServiceResponse,
 )
 
@@ -56,6 +58,25 @@ class ApiTest(unittest.TestCase):
         self.assertNotIn("service", body)
         self.assertNotIn("tool_context", body)
 
+    def test_list_services(self) -> None:
+        route = _route(self.app, "/v1/services")
+        raw_body = route.endpoint()
+        body = _serialized_response(route, raw_body)
+
+        self.assertEqual(route.response_model, ServiceListResponse)
+        self.assertEqual(body["org_id"], "default")
+        self.assertEqual(body["service_count"], 1)
+        self.assertEqual(body["services"][0]["id"], "backend")
+
+    def test_list_services_unknown_org(self) -> None:
+        route = _route(self.app, "/v1/services")
+
+        with self.assertRaises(HTTPException) as context:
+            route.endpoint(org_id="missing")
+
+        self.assertEqual(context.exception.status_code, 404)
+        self.assertEqual(context.exception.detail, "catalog not found")
+
     def test_get_service(self) -> None:
         route = _route(self.app, "/v1/services/{service_id}")
         raw_body = route.endpoint(service_id="backend")
@@ -75,6 +96,26 @@ class ApiTest(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 404)
         self.assertEqual(context.exception.detail, "service not found")
+
+    def test_get_environment_returns_tool_context(self) -> None:
+        route = _route(self.app, "/v1/services/{service_id}/environments/{environment}")
+        raw_body = route.endpoint(service_id="backend", environment="production")
+        body = _serialized_response(route, raw_body)
+
+        self.assertEqual(route.response_model, EnvironmentResponse)
+        self.assertEqual(body["service_id"], "backend")
+        self.assertEqual(body["environment"], "prod")
+        self.assertEqual(body["environment_config"]["runtime"]["workload"], "backend-api")
+        self.assertEqual(body["tool_context"]["repository"]["full_name"], "acme/backend")
+
+    def test_get_environment_404(self) -> None:
+        route = _route(self.app, "/v1/services/{service_id}/environments/{environment}")
+
+        with self.assertRaises(HTTPException) as context:
+            route.endpoint(service_id="backend", environment="qa")
+
+        self.assertEqual(context.exception.status_code, 404)
+        self.assertEqual(context.exception.detail, "environment not found")
 
     def test_ingest_service_catalog_replaces_active_catalog(self) -> None:
         ingest_route = _route(self.app, "/v1/ingest/service-catalog")
@@ -112,8 +153,10 @@ class ApiTest(unittest.TestCase):
 
         self.assertIn("CatalogIngestRequest", schema["components"]["schemas"])
         self.assertIn("CatalogIngestResponse", schema["components"]["schemas"])
+        self.assertIn("EnvironmentResponse", schema["components"]["schemas"])
         self.assertIn("HealthResponse", schema["components"]["schemas"])
         self.assertIn("ResolveResponse", schema["components"]["schemas"])
+        self.assertIn("ServiceListResponse", schema["components"]["schemas"])
         self.assertIn("ServiceResponse", schema["components"]["schemas"])
 
 
