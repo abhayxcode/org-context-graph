@@ -52,6 +52,8 @@ Resolved responses include `tool_context`:
 - runbooks and dependencies
 - `tool_arguments` keyed by Tool Control Plane capability/action, such as `code_host.get_recent_changes`, `ci.get_checks`, and `runtime.get_workload_status`
 
+Catalogs are validated at load time. Invalid catalog data fails fast for missing org IDs, duplicate service IDs, missing owners/repos, unsupported repository providers, missing environments, and non-normalized environment names.
+
 ## Test
 
 ```bash

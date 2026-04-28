@@ -16,6 +16,10 @@ class ResolveResult:
     reason: str | None = None
 
 
+class CatalogValidationError(ValueError):
+    pass
+
+
 def normalize_environment(value: str) -> str:
     aliases = {
         "production": "prod",
@@ -29,6 +33,7 @@ def normalize_environment(value: str) -> str:
 class ServiceCatalog:
     def __init__(self, catalog: dict[str, Any]):
         self.catalog = catalog
+        validate_catalog(self.catalog)
 
     @classmethod
     def from_file(cls, path: str | Path) -> "ServiceCatalog":
@@ -111,6 +116,73 @@ def _matches_service(service: dict[str, Any], normalized_query: str) -> bool:
         or normalized_query in repositories
         or normalized_query in [repo.rsplit("/", 1)[-1].lower() for repo in service.get("repos", [])]
     )
+
+
+def validate_catalog(catalog: dict[str, Any]) -> None:
+    errors: list[str] = []
+    if not str(catalog.get("org_id", "")).strip():
+        errors.append("org_id is required")
+
+    services = catalog.get("services")
+    if not isinstance(services, list) or not services:
+        errors.append("services must be a non-empty list")
+        raise CatalogValidationError("; ".join(errors))
+
+    seen_service_ids: set[str] = set()
+    for index, service in enumerate(services):
+        prefix = f"services[{index}]"
+        service_id = str(service.get("id", "")).strip()
+        if not service_id:
+            errors.append(f"{prefix}.id is required")
+        elif service_id in seen_service_ids:
+            errors.append(f"{prefix}.id '{service_id}' is duplicated")
+        seen_service_ids.add(service_id)
+
+        if not str(service.get("name", "")).strip():
+            errors.append(f"{prefix}.name is required")
+
+        owners = service.get("owners")
+        if not isinstance(owners, list) or not owners:
+            errors.append(f"{prefix}.owners must be a non-empty list")
+
+        if not service.get("repositories") and not service.get("repos"):
+            errors.append(f"{prefix} must define repositories or repos")
+        for repository_index, repository in enumerate(service.get("repositories", [])):
+            errors.extend(_validate_repository(repository, f"{prefix}.repositories[{repository_index}]"))
+
+        environments = service.get("environments")
+        if not isinstance(environments, dict) or not environments:
+            errors.append(f"{prefix}.environments must be a non-empty object")
+            continue
+
+        for environment_name, environment_config in environments.items():
+            env_prefix = f"{prefix}.environments.{environment_name}"
+            if normalize_environment(str(environment_name)) != str(environment_name):
+                errors.append(f"{env_prefix} must use normalized environment name")
+            if not isinstance(environment_config, dict):
+                errors.append(f"{env_prefix} must be an object")
+                continue
+            runtime = environment_config.get("runtime")
+            if not isinstance(runtime, dict):
+                errors.append(f"{env_prefix}.runtime must be an object")
+            elif not str(runtime.get("provider", "")).strip():
+                errors.append(f"{env_prefix}.runtime.provider is required")
+
+    if errors:
+        raise CatalogValidationError("; ".join(errors))
+
+
+def _validate_repository(repository: dict[str, Any], prefix: str) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(repository, dict):
+        return [f"{prefix} must be an object"]
+    if not str(repository.get("owner", "")).strip():
+        errors.append(f"{prefix}.owner is required")
+    if not str(repository.get("name", "")).strip():
+        errors.append(f"{prefix}.name is required")
+    if repository.get("provider") and str(repository.get("provider")).strip() != "github":
+        errors.append(f"{prefix}.provider currently supports only github")
+    return errors
 
 
 def build_tool_context(

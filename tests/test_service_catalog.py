@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from org_context_graph.service_catalog import (
+    CatalogValidationError,
     ServiceCatalog,
     normalize_environment,
     parse_repository,
@@ -79,6 +80,61 @@ class ServiceCatalogTest(unittest.TestCase):
         self.assertEqual(parse_repository("github.com/acme/backend")["full_name"], "acme/backend")
         self.assertEqual(parse_repository("https://github.com/acme/backend")["full_name"], "acme/backend")
         self.assertEqual(parse_repository("git@github.com:acme/backend.git")["full_name"], "acme/backend")
+
+    def test_rejects_missing_org_id(self) -> None:
+        with self.assertRaisesRegex(CatalogValidationError, "org_id is required"):
+            ServiceCatalog({"services": [{"id": "backend"}]})
+
+    def test_rejects_duplicate_service_ids(self) -> None:
+        catalog = {
+            "org_id": "default",
+            "services": [
+                _valid_service("backend"),
+                _valid_service("backend"),
+            ],
+        }
+        with self.assertRaisesRegex(CatalogValidationError, "duplicated"):
+            ServiceCatalog(catalog)
+
+    def test_rejects_missing_repository(self) -> None:
+        service = _valid_service("backend")
+        service.pop("repositories")
+        service.pop("repos")
+        with self.assertRaisesRegex(CatalogValidationError, "repositories or repos"):
+            ServiceCatalog({"org_id": "default", "services": [service]})
+
+    def test_rejects_non_normalized_environment_name(self) -> None:
+        service = _valid_service("backend")
+        service["environments"]["production"] = service["environments"].pop("prod")
+        with self.assertRaisesRegex(CatalogValidationError, "normalized environment"):
+            ServiceCatalog({"org_id": "default", "services": [service]})
+
+def _valid_service(service_id: str) -> dict:
+    return {
+        "id": service_id,
+        "name": "Backend API",
+        "aliases": ["backend"],
+        "owners": ["team-platform"],
+        "repos": ["github.com/acme/backend"],
+        "repositories": [
+            {
+                "provider": "github",
+                "host": "github.com",
+                "owner": "acme",
+                "name": "backend",
+                "default_branch": "main",
+            }
+        ],
+        "environments": {
+            "prod": {
+                "runtime": {
+                    "provider": "kubernetes",
+                    "namespace": "prod",
+                    "workload": "backend-api",
+                }
+            }
+        },
+    }
 
 
 if __name__ == "__main__":
