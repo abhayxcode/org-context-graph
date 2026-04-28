@@ -9,6 +9,20 @@ class HealthResponse(BaseModel):
     status: str
 
 
+class CatalogIngestRequest(BaseModel):
+    org_id: str
+    services: list[dict[str, Any]]
+
+    class Config:
+        extra = "allow"
+
+
+class CatalogIngestResponse(BaseModel):
+    status: str
+    org_id: str
+    service_count: int
+
+
 class ToolContext(BaseModel):
     service_id: str
     environment: str

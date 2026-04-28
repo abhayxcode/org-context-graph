@@ -39,9 +39,9 @@ ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
 - `GET /v1/services/{service_id}`
 - `POST /v1/ingest/service-catalog`
 
-`POST /v1/ingest/service-catalog` is planned, not implemented yet.
+`POST /v1/ingest/service-catalog` validates a service catalog payload and replaces the active in-memory catalog only after validation succeeds. Disk persistence is planned for a later phase.
 
-FastAPI response models define the public contract for health, service lookup, and service resolution responses. The generated OpenAPI schema includes `HealthResponse`, `ResolveResponse`, `ServiceResponse`, and the nested `ToolContext` model.
+FastAPI response models define the public contract for health, service lookup, service catalog ingest, and service resolution responses. The generated OpenAPI schema includes `CatalogIngestRequest`, `CatalogIngestResponse`, `HealthResponse`, `ResolveResponse`, `ServiceResponse`, and the nested `ToolContext` model.
 
 Resolved responses include `tool_context`:
 

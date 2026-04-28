@@ -6,8 +6,14 @@ from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query
 
-from org_context_graph.models import HealthResponse, ResolveResponse, ServiceResponse
-from org_context_graph.service_catalog import ServiceCatalog
+from org_context_graph.models import (
+    CatalogIngestRequest,
+    CatalogIngestResponse,
+    HealthResponse,
+    ResolveResponse,
+    ServiceResponse,
+)
+from org_context_graph.service_catalog import CatalogValidationError, ServiceCatalog
 
 
 def default_catalog_path() -> Path:
@@ -46,7 +52,32 @@ def create_app(catalog_path: str | Path | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="service not found")
         return service
 
+    @app.post(
+        "/v1/ingest/service-catalog",
+        response_model=CatalogIngestResponse,
+    )
+    def ingest_service_catalog(payload: CatalogIngestRequest) -> dict[str, object]:
+        nonlocal catalog
+        payload_dict = _model_to_dict(payload)
+        try:
+            next_catalog = ServiceCatalog(payload_dict)
+        except CatalogValidationError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
+        catalog = next_catalog
+        return {
+            "status": "accepted",
+            "org_id": catalog.org_id,
+            "service_count": len(catalog.services()),
+        }
+
     return app
 
 
 app = create_app()
+
+
+def _model_to_dict(model: CatalogIngestRequest) -> dict:
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    return model.dict()

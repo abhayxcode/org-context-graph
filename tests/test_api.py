@@ -9,7 +9,13 @@ from fastapi import HTTPException
 from fastapi.routing import APIRoute, serialize_response
 
 from org_context_graph.main import create_app
-from org_context_graph.models import HealthResponse, ResolveResponse, ServiceResponse
+from org_context_graph.models import (
+    CatalogIngestRequest,
+    CatalogIngestResponse,
+    HealthResponse,
+    ResolveResponse,
+    ServiceResponse,
+)
 
 
 CATALOG_PATH = Path(__file__).resolve().parents[1] / "data" / "service-catalog.json"
@@ -70,9 +76,42 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(context.exception.status_code, 404)
         self.assertEqual(context.exception.detail, "service not found")
 
+    def test_ingest_service_catalog_replaces_active_catalog(self) -> None:
+        ingest_route = _route(self.app, "/v1/ingest/service-catalog")
+        resolve_route = _route(self.app, "/v1/resolve")
+        payload = CatalogIngestRequest(
+            org_id="default",
+            services=[_valid_service("payments", "Payments API")],
+        )
+
+        raw_body = ingest_route.endpoint(payload=payload)
+        body = _serialized_response(ingest_route, raw_body)
+        resolved = resolve_route.endpoint(q="payments", environment="prod")
+
+        self.assertEqual(ingest_route.response_model, CatalogIngestResponse)
+        self.assertEqual(body, {"status": "accepted", "org_id": "default", "service_count": 1})
+        self.assertEqual(resolved["status"], "resolved")
+        self.assertEqual(resolved["service"]["id"], "payments")
+
+    def test_invalid_ingest_does_not_replace_active_catalog(self) -> None:
+        ingest_route = _route(self.app, "/v1/ingest/service-catalog")
+        resolve_route = _route(self.app, "/v1/resolve")
+        payload = CatalogIngestRequest(org_id="default", services=[{"id": "broken"}])
+
+        with self.assertRaises(HTTPException) as context:
+            ingest_route.endpoint(payload=payload)
+
+        resolved = resolve_route.endpoint(q="backend", environment="prod")
+        self.assertEqual(context.exception.status_code, 422)
+        self.assertIn("name is required", context.exception.detail)
+        self.assertEqual(resolved["status"], "resolved")
+        self.assertEqual(resolved["service"]["id"], "backend")
+
     def test_openapi_uses_response_models(self) -> None:
         schema = self.app.openapi()
 
+        self.assertIn("CatalogIngestRequest", schema["components"]["schemas"])
+        self.assertIn("CatalogIngestResponse", schema["components"]["schemas"])
         self.assertIn("HealthResponse", schema["components"]["schemas"])
         self.assertIn("ResolveResponse", schema["components"]["schemas"])
         self.assertIn("ServiceResponse", schema["components"]["schemas"])
@@ -96,6 +135,33 @@ def _serialized_response(route: APIRoute, body: Any) -> Any:
             is_coroutine=False,
         )
     )
+
+
+def _valid_service(service_id: str, name: str) -> dict[str, Any]:
+    return {
+        "id": service_id,
+        "name": name,
+        "aliases": [service_id],
+        "owners": ["team-platform"],
+        "repositories": [
+            {
+                "provider": "github",
+                "host": "github.com",
+                "owner": "acme",
+                "name": service_id,
+                "default_branch": "main",
+            }
+        ],
+        "environments": {
+            "prod": {
+                "runtime": {
+                    "provider": "kubernetes",
+                    "namespace": "prod",
+                    "workload": service_id,
+                }
+            }
+        },
+    }
 
 
 if __name__ == "__main__":
