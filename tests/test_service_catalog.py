@@ -68,6 +68,14 @@ class ServiceCatalogTest(unittest.TestCase):
             {"target": "backend-prod"},
         )
 
+    def test_tool_context_contains_pr_metadata(self) -> None:
+        result = self.catalog.resolve(org_id="default", query="backend", environment="prod")
+        tool_context = result["tool_context"]
+
+        self.assertEqual(tool_context["build_commands"], ["npm install", "npm run build"])
+        self.assertEqual(tool_context["test_commands"], ["npm test"])
+        self.assertEqual(tool_context["suggested_reviewers"], ["team-platform"])
+
     def test_primary_repository_uses_structured_repository(self) -> None:
         service = self.catalog.get_service(org_id="default", service_id="backend")
         assert service is not None
@@ -193,6 +201,12 @@ class ServiceCatalogTest(unittest.TestCase):
         service = _valid_service("backend")
         service["environments"]["production"] = service["environments"].pop("prod")
         with self.assertRaisesRegex(CatalogValidationError, "normalized environment"):
+            ServiceCatalog({"org_id": "default", "services": [service]})
+
+    def test_rejects_invalid_pr_metadata_fields(self) -> None:
+        service = _valid_service("backend")
+        service["test_commands"] = "npm test"
+        with self.assertRaisesRegex(CatalogValidationError, "test_commands must be a list"):
             ServiceCatalog({"org_id": "default", "services": [service]})
 
 def _valid_service(service_id: str) -> dict:

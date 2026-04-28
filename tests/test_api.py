@@ -50,6 +50,8 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(body["status"], "resolved")
         self.assertEqual(body["environment"], "prod")
         self.assertEqual(body["tool_context"]["repository"]["full_name"], "acme/backend")
+        self.assertEqual(body["tool_context"]["test_commands"], ["npm test"])
+        self.assertEqual(body["tool_context"]["suggested_reviewers"], ["team-platform"])
         self.assertEqual(
             body["tool_context"]["tool_arguments"]["code_host.get_recent_changes"],
             {"repository": "acme/backend", "branch": "main"},

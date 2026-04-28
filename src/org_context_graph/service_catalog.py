@@ -345,6 +345,10 @@ def validate_catalog(catalog: dict[str, Any]) -> None:
         if not isinstance(owners, list) or not owners:
             errors.append(f"{prefix}.owners must be a non-empty list")
 
+        for list_field in ["build_commands", "test_commands", "suggested_reviewers"]:
+            if list_field in service and not isinstance(service.get(list_field), list):
+                errors.append(f"{prefix}.{list_field} must be a list")
+
         if not service.get("repositories") and not service.get("repos"):
             errors.append(f"{prefix} must define repositories or repos")
         for repository_index, repository in enumerate(service.get("repositories", [])):
@@ -406,6 +410,9 @@ def build_tool_context(
         "ci": ci,
         "runbooks": service.get("runbooks", []),
         "dependencies": service.get("dependencies", []),
+        "build_commands": service.get("build_commands", []),
+        "test_commands": service.get("test_commands", []),
+        "suggested_reviewers": service.get("suggested_reviewers", service.get("owners", [])),
         "tool_arguments": {
             "code_host.get_recent_changes": _without_empty({
                 "repository": repository_name,

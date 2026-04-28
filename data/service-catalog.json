@@ -7,6 +7,9 @@
       "aliases": ["backend", "api", "backend-api"],
       "owners": ["team-platform"],
       "repos": ["github.com/acme/backend"],
+      "build_commands": ["npm install", "npm run build"],
+      "test_commands": ["npm test"],
+      "suggested_reviewers": ["team-platform"],
       "repositories": [
         {
           "provider": "github",
