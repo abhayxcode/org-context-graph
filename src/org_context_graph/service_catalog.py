@@ -105,6 +105,27 @@ class ServiceCatalog:
             "tool_context": build_tool_context(service, normalized_env, environment_config),
         }
 
+    def search(
+        self,
+        *,
+        org_id: str,
+        query: str,
+        result_type: str = "all",
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        if org_id != self.org_id:
+            return []
+
+        normalized_query = query.strip().lower()
+        if not normalized_query:
+            return []
+
+        results: list[dict[str, Any]] = []
+        for service in self.services():
+            results.extend(_search_service(service, normalized_query, result_type))
+
+        return sorted(results, key=lambda item: (-item["score"], item["type"], item["title"]))[:limit]
+
 
 def _matches_service(service: dict[str, Any], normalized_query: str) -> bool:
     aliases = [str(alias).lower() for alias in service.get("aliases", [])]
@@ -116,6 +137,90 @@ def _matches_service(service: dict[str, Any], normalized_query: str) -> bool:
         or normalized_query in repositories
         or normalized_query in [repo.rsplit("/", 1)[-1].lower() for repo in service.get("repos", [])]
     )
+
+
+def _search_service(
+    service: dict[str, Any],
+    normalized_query: str,
+    result_type: str,
+) -> list[dict[str, Any]]:
+    allowed_type = result_type.strip().lower()
+    results: list[dict[str, Any]] = []
+
+    def add_result(
+        item_type: str,
+        title: str,
+        reference: str,
+        haystack: list[str],
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if allowed_type not in {"all", item_type}:
+            return
+        score = _match_score(normalized_query, haystack)
+        if score == 0:
+            return
+        results.append({
+            "type": item_type,
+            "service_id": service["id"],
+            "title": title,
+            "reference": reference,
+            "score": score,
+            "metadata": metadata or {},
+        })
+
+    repository = primary_repository(service)
+    service_name = str(service.get("name", ""))
+    add_result(
+        "service",
+        service_name,
+        str(service.get("id", "")),
+        [
+            str(service.get("id", "")),
+            service_name,
+            *[str(alias) for alias in service.get("aliases", [])],
+        ],
+        {"owners": service.get("owners", [])},
+    )
+    add_result(
+        "repository",
+        repository.get("full_name", repository.get("url", "")),
+        repository.get("url", repository.get("full_name", "")),
+        [
+            repository.get("full_name", ""),
+            repository.get("name", ""),
+            repository.get("url", ""),
+            *[str(repo) for repo in service.get("repos", [])],
+        ],
+        {"provider": repository.get("provider")},
+    )
+
+    for owner in service.get("owners", []):
+        add_result("owner", str(owner), str(owner), [str(owner), service_name])
+
+    for runbook in service.get("runbooks", []):
+        add_result("runbook", str(runbook).rsplit("/", 1)[-1], str(runbook), [str(runbook), service_name])
+
+    for dependency in service.get("dependencies", []):
+        add_result("dependency", str(dependency), str(dependency), [str(dependency), service_name])
+
+    return results
+
+
+def _match_score(normalized_query: str, haystack: list[str]) -> float:
+    best_score = 0.0
+    query_terms = [term for term in normalized_query.replace("/", " ").replace("-", " ").split() if term]
+    for value in haystack:
+        normalized_value = str(value).strip().lower()
+        value_terms = set(normalized_value.replace("/", " ").replace("-", " ").split())
+        if normalized_value == normalized_query:
+            best_score = max(best_score, 1.0)
+        elif normalized_query in normalized_value:
+            best_score = max(best_score, 0.82)
+        elif query_terms and all(term in value_terms for term in query_terms):
+            best_score = max(best_score, 0.72)
+        elif query_terms and any(term in value_terms for term in query_terms):
+            best_score = max(best_score, 0.45)
+    return best_score
 
 
 def validate_catalog(catalog: dict[str, Any]) -> None:

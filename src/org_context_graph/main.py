@@ -12,6 +12,7 @@ from org_context_graph.models import (
     EnvironmentResponse,
     HealthResponse,
     ResolveResponse,
+    SearchResponse,
     ServiceListResponse,
     ServiceResponse,
 )
@@ -47,6 +48,27 @@ def create_app(catalog_path: str | Path | None = None) -> FastAPI:
         org_id: str = "default",
     ) -> dict[str, object]:
         return catalog.resolve(org_id=org_id, query=q, environment=environment)
+
+    @app.get(
+        "/v1/search",
+        response_model=SearchResponse,
+    )
+    def search(
+        q: Annotated[str, Query(min_length=1)],
+        result_type: Annotated[str, Query(alias="type")] = "all",
+        limit: Annotated[int, Query(ge=1, le=50)] = 10,
+        org_id: str = "default",
+    ) -> dict[str, object]:
+        if org_id != catalog.org_id:
+            raise HTTPException(status_code=404, detail="catalog not found")
+        results = catalog.search(org_id=org_id, query=q, result_type=result_type, limit=limit)
+        return {
+            "org_id": catalog.org_id,
+            "query": q,
+            "type": result_type,
+            "result_count": len(results),
+            "results": results,
+        }
 
     @app.get(
         "/v1/services",

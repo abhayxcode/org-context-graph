@@ -15,6 +15,7 @@ from org_context_graph.models import (
     EnvironmentResponse,
     HealthResponse,
     ResolveResponse,
+    SearchResponse,
     ServiceListResponse,
     ServiceResponse,
 )
@@ -57,6 +58,28 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(body["candidates"], [])
         self.assertNotIn("service", body)
         self.assertNotIn("tool_context", body)
+
+    def test_search_returns_catalog_results(self) -> None:
+        route = _route(self.app, "/v1/search")
+        raw_body = route.endpoint(q="oncall", result_type="runbook")
+        body = _serialized_response(route, raw_body)
+
+        self.assertEqual(route.response_model, SearchResponse)
+        self.assertEqual(body["org_id"], "default")
+        self.assertEqual(body["query"], "oncall")
+        self.assertEqual(body["type"], "runbook")
+        self.assertEqual(body["result_count"], 1)
+        self.assertEqual(body["results"][0]["service_id"], "backend")
+        self.assertEqual(body["results"][0]["reference"], "docs/backend-oncall.md")
+
+    def test_search_unknown_org(self) -> None:
+        route = _route(self.app, "/v1/search")
+
+        with self.assertRaises(HTTPException) as context:
+            route.endpoint(q="backend", org_id="missing")
+
+        self.assertEqual(context.exception.status_code, 404)
+        self.assertEqual(context.exception.detail, "catalog not found")
 
     def test_list_services(self) -> None:
         route = _route(self.app, "/v1/services")
@@ -156,6 +179,8 @@ class ApiTest(unittest.TestCase):
         self.assertIn("EnvironmentResponse", schema["components"]["schemas"])
         self.assertIn("HealthResponse", schema["components"]["schemas"])
         self.assertIn("ResolveResponse", schema["components"]["schemas"])
+        self.assertIn("SearchResponse", schema["components"]["schemas"])
+        self.assertIn("SearchResult", schema["components"]["schemas"])
         self.assertIn("ServiceListResponse", schema["components"]["schemas"])
         self.assertIn("ServiceResponse", schema["components"]["schemas"])
 

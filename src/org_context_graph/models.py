@@ -74,3 +74,20 @@ class EnvironmentResponse(BaseModel):
     environment: str
     environment_config: dict[str, Any]
     tool_context: ToolContext
+
+
+class SearchResult(BaseModel):
+    type: str
+    service_id: str
+    title: str
+    reference: str
+    score: float
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SearchResponse(BaseModel):
+    org_id: str
+    query: str
+    type: str
+    result_count: int
+    results: list[SearchResult]

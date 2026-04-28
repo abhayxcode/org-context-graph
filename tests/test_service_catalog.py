@@ -81,6 +81,42 @@ class ServiceCatalogTest(unittest.TestCase):
         self.assertEqual(parse_repository("https://github.com/acme/backend")["full_name"], "acme/backend")
         self.assertEqual(parse_repository("git@github.com:acme/backend.git")["full_name"], "acme/backend")
 
+    def test_search_finds_runbooks(self) -> None:
+        results = self.catalog.search(
+            org_id="default",
+            query="oncall",
+            result_type="runbook",
+        )
+
+        self.assertEqual(results[0]["type"], "runbook")
+        self.assertEqual(results[0]["service_id"], "backend")
+        self.assertEqual(results[0]["reference"], "docs/backend-oncall.md")
+
+    def test_search_finds_dependencies(self) -> None:
+        results = self.catalog.search(
+            org_id="default",
+            query="postgres",
+            result_type="dependency",
+        )
+
+        self.assertEqual(results[0]["type"], "dependency")
+        self.assertEqual(results[0]["reference"], "postgres-main")
+
+    def test_search_finds_repository(self) -> None:
+        results = self.catalog.search(
+            org_id="default",
+            query="acme/backend",
+            result_type="repository",
+        )
+
+        self.assertEqual(results[0]["type"], "repository")
+        self.assertEqual(results[0]["reference"], "https://github.com/acme/backend")
+
+    def test_search_unknown_org_returns_empty(self) -> None:
+        results = self.catalog.search(org_id="missing", query="backend")
+
+        self.assertEqual(results, [])
+
     def test_rejects_missing_org_id(self) -> None:
         with self.assertRaisesRegex(CatalogValidationError, "org_id is required"):
             ServiceCatalog({"services": [{"id": "backend"}]})
