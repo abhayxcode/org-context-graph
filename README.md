@@ -41,6 +41,8 @@ ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
 
 `POST /v1/ingest/service-catalog` is planned, not implemented yet.
 
+FastAPI response models define the public contract for health, service lookup, and service resolution responses. The generated OpenAPI schema includes `HealthResponse`, `ResolveResponse`, `ServiceResponse`, and the nested `ToolContext` model.
+
 Resolved responses include `tool_context`:
 
 - service and environment
