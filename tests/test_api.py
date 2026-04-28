@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import unittest
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ from org_context_graph.models import (
     ServiceResponse,
     SimilarIncidentsResponse,
 )
+from org_context_graph.storage import MemoryCatalogStore
 
 
 CATALOG_PATH = Path(__file__).resolve().parents[1] / "data" / "service-catalog.json"
@@ -29,7 +31,8 @@ CATALOG_PATH = Path(__file__).resolve().parents[1] / "data" / "service-catalog.j
 
 class ApiTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.app = create_app(CATALOG_PATH)
+        self.store = MemoryCatalogStore(json.loads(CATALOG_PATH.read_text(encoding="utf8")))
+        self.app = create_app(catalog_store=self.store)
 
     def test_healthz(self) -> None:
         route = _route(self.app, "/healthz")
@@ -159,6 +162,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(body, {"status": "accepted", "org_id": "default", "service_count": 1})
         self.assertEqual(resolved["status"], "resolved")
         self.assertEqual(resolved["service"]["id"], "payments")
+        self.assertEqual(self.store.load()["services"][0]["id"], "payments")
 
     def test_invalid_ingest_does_not_replace_active_catalog(self) -> None:
         ingest_route = _route(self.app, "/v1/ingest/service-catalog")
@@ -200,6 +204,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(ingest_route.response_model, IncidentIngestResponse)
         self.assertEqual(body["status"], "accepted")
         self.assertEqual(body["incident"]["environment"], "prod")
+        self.assertEqual(self.store.load()["incidents"][0]["title"], "Database timeout during checkout")
         self.assertEqual(similar_route.response_model, SimilarIncidentsResponse)
         self.assertEqual(similar["incident_count"], 1)
         self.assertEqual(similar["incidents"][0]["incident"]["title"], "Database timeout during checkout")

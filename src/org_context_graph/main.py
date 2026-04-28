@@ -25,15 +25,20 @@ from org_context_graph.service_catalog import (
     build_tool_context,
     normalize_environment,
 )
+from org_context_graph.storage import CatalogStore, JsonCatalogStore
 
 
 def default_catalog_path() -> Path:
     return Path(os.environ.get("ORG_CONTEXT_CATALOG_PATH", "data/service-catalog.json"))
 
 
-def create_app(catalog_path: str | Path | None = None) -> FastAPI:
+def create_app(
+    catalog_path: str | Path | None = None,
+    catalog_store: CatalogStore | None = None,
+) -> FastAPI:
     app = FastAPI(title="Org Context Graph", version="0.1.0")
-    catalog = ServiceCatalog.from_file(catalog_path or default_catalog_path())
+    store = catalog_store or JsonCatalogStore(catalog_path or default_catalog_path())
+    catalog = ServiceCatalog(store.load())
 
     @app.get("/healthz", response_model=HealthResponse)
     def healthz() -> dict[str, str]:
@@ -136,6 +141,7 @@ def create_app(catalog_path: str | Path | None = None) -> FastAPI:
         except CatalogValidationError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
+        store.save(next_catalog.to_dict())
         catalog = next_catalog
         return {
             "status": "accepted",
@@ -158,6 +164,7 @@ def create_app(catalog_path: str | Path | None = None) -> FastAPI:
         except CatalogValidationError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
+        store.save(catalog.to_dict())
         return {
             "status": "accepted",
             "org_id": catalog.org_id,

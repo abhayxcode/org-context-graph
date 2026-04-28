@@ -44,13 +44,13 @@ ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
 - `POST /v1/ingest/service-catalog`
 - `POST /v1/ingest/incident`
 
-`POST /v1/ingest/service-catalog` validates a service catalog payload and replaces the active in-memory catalog only after validation succeeds. Disk persistence is planned for a later phase.
+`POST /v1/ingest/service-catalog` validates a service catalog payload and replaces the active catalog only after validation succeeds. When the app is backed by `ORG_CONTEXT_CATALOG_PATH` or the default JSON catalog path, accepted catalog and incident changes are persisted back to that JSON file through the catalog store boundary.
 
 FastAPI response models define the public contract for health, search, service listing, service lookup, environment lookup, service catalog ingest, and service resolution responses. The generated OpenAPI schema includes `CatalogIngestRequest`, `CatalogIngestResponse`, `EnvironmentResponse`, `HealthResponse`, `ResolveResponse`, `SearchResponse`, `SearchResult`, `ServiceListResponse`, `ServiceResponse`, and the nested `ToolContext` model.
 
 Search is deterministic in v1 and covers service names, aliases, repositories, owners, runbooks, and dependencies. Vector-backed RAG can replace the implementation later without changing the API contract.
 
-Incident memory is in-memory in the current phase. `POST /v1/ingest/incident` records a prior diagnosis for a known service, and `GET /v1/incidents/similar` returns deterministic matches by service, environment, title, summary, root cause, resolution, and tags. Persistent storage and vector similarity are planned for later phases.
+Incident memory is stored in the active catalog store in the current phase. `POST /v1/ingest/incident` records a prior diagnosis for a known service, and `GET /v1/incidents/similar` returns deterministic matches by service, environment, title, summary, root cause, resolution, and tags. Postgres persistence and vector similarity are planned for later phases.
 
 Resolved responses include `tool_context`:
 

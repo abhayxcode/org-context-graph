@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,9 @@ class ServiceCatalog:
     @classmethod
     def from_file(cls, path: str | Path) -> "ServiceCatalog":
         return cls(json.loads(Path(path).read_text(encoding="utf8")))
+
+    def to_dict(self) -> dict[str, Any]:
+        return deepcopy(self.catalog)
 
     @property
     def org_id(self) -> str:
