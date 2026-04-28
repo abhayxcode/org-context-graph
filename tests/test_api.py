@@ -14,10 +14,13 @@ from org_context_graph.models import (
     CatalogIngestResponse,
     EnvironmentResponse,
     HealthResponse,
+    IncidentIngestRequest,
+    IncidentIngestResponse,
     ResolveResponse,
     SearchResponse,
     ServiceListResponse,
     ServiceResponse,
+    SimilarIncidentsResponse,
 )
 
 
@@ -171,6 +174,58 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(resolved["status"], "resolved")
         self.assertEqual(resolved["service"]["id"], "backend")
 
+    def test_ingest_incident_and_find_similar(self) -> None:
+        ingest_route = _route(self.app, "/v1/ingest/incident")
+        similar_route = _route(self.app, "/v1/incidents/similar")
+        payload = IncidentIngestRequest(
+            org_id="default",
+            service_id="backend",
+            environment="production",
+            title="Database timeout during checkout",
+            summary="Backend timed out while calling postgres-main.",
+            tags=["database", "timeout"],
+        )
+
+        raw_body = ingest_route.endpoint(payload=payload)
+        body = _serialized_response(ingest_route, raw_body)
+        similar = _serialized_response(
+            similar_route,
+            similar_route.endpoint(
+                service_id="backend",
+                q="database timeout",
+                environment="prod",
+            ),
+        )
+
+        self.assertEqual(ingest_route.response_model, IncidentIngestResponse)
+        self.assertEqual(body["status"], "accepted")
+        self.assertEqual(body["incident"]["environment"], "prod")
+        self.assertEqual(similar_route.response_model, SimilarIncidentsResponse)
+        self.assertEqual(similar["incident_count"], 1)
+        self.assertEqual(similar["incidents"][0]["incident"]["title"], "Database timeout during checkout")
+
+    def test_ingest_incident_unknown_service(self) -> None:
+        ingest_route = _route(self.app, "/v1/ingest/incident")
+        payload = IncidentIngestRequest(
+            service_id="payments",
+            title="Unknown service incident",
+        )
+
+        with self.assertRaises(HTTPException) as context:
+            ingest_route.endpoint(payload=payload)
+
+        self.assertEqual(context.exception.status_code, 422)
+        self.assertIn("does not exist", context.exception.detail)
+
+    def test_similar_incidents_unknown_service(self) -> None:
+        route = _route(self.app, "/v1/incidents/similar")
+
+        with self.assertRaises(HTTPException) as context:
+            route.endpoint(service_id="payments", q="timeout")
+
+        self.assertEqual(context.exception.status_code, 404)
+        self.assertEqual(context.exception.detail, "service not found")
+
     def test_openapi_uses_response_models(self) -> None:
         schema = self.app.openapi()
 
@@ -178,11 +233,15 @@ class ApiTest(unittest.TestCase):
         self.assertIn("CatalogIngestResponse", schema["components"]["schemas"])
         self.assertIn("EnvironmentResponse", schema["components"]["schemas"])
         self.assertIn("HealthResponse", schema["components"]["schemas"])
+        self.assertIn("IncidentIngestRequest", schema["components"]["schemas"])
+        self.assertIn("IncidentIngestResponse", schema["components"]["schemas"])
         self.assertIn("ResolveResponse", schema["components"]["schemas"])
         self.assertIn("SearchResponse", schema["components"]["schemas"])
         self.assertIn("SearchResult", schema["components"]["schemas"])
         self.assertIn("ServiceListResponse", schema["components"]["schemas"])
         self.assertIn("ServiceResponse", schema["components"]["schemas"])
+        self.assertIn("SimilarIncidentsResponse", schema["components"]["schemas"])
+        self.assertIn("SimilarIncidentResult", schema["components"]["schemas"])
 
 
 def _route(app: Any, path: str) -> APIRoute:

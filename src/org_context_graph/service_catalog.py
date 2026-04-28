@@ -33,6 +33,7 @@ def normalize_environment(value: str) -> str:
 class ServiceCatalog:
     def __init__(self, catalog: dict[str, Any]):
         self.catalog = catalog
+        self._incidents = list(catalog.get("incidents", []))
         validate_catalog(self.catalog)
 
     @classmethod
@@ -45,6 +46,9 @@ class ServiceCatalog:
 
     def services(self) -> list[dict[str, Any]]:
         return list(self.catalog.get("services", []))
+
+    def incidents(self) -> list[dict[str, Any]]:
+        return list(self._incidents)
 
     def get_service(self, org_id: str, service_id: str) -> dict[str, Any] | None:
         if org_id != self.org_id:
@@ -125,6 +129,59 @@ class ServiceCatalog:
             results.extend(_search_service(service, normalized_query, result_type))
 
         return sorted(results, key=lambda item: (-item["score"], item["type"], item["title"]))[:limit]
+
+    def ingest_incident(self, incident: dict[str, Any]) -> dict[str, Any]:
+        normalized_incident = dict(incident)
+        service_id = str(normalized_incident.get("service_id", "")).strip()
+        if self.get_service(org_id=self.org_id, service_id=service_id) is None:
+            raise CatalogValidationError(f"service_id '{service_id}' does not exist")
+
+        normalized_incident["service_id"] = service_id
+        if normalized_incident.get("environment"):
+            normalized_incident["environment"] = normalize_environment(str(normalized_incident["environment"]))
+        if not normalized_incident.get("id"):
+            normalized_incident["id"] = f"incident-{len(self._incidents) + 1}"
+
+        self._incidents.append(normalized_incident)
+        self.catalog["incidents"] = self.incidents()
+        return normalized_incident
+
+    def similar_incidents(
+        self,
+        *,
+        org_id: str,
+        service_id: str,
+        query: str = "",
+        environment: str | None = None,
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        if org_id != self.org_id:
+            return []
+        if self.get_service(org_id=org_id, service_id=service_id) is None:
+            return []
+
+        normalized_query = query.strip().lower()
+        normalized_environment = normalize_environment(environment) if environment else None
+        results: list[dict[str, Any]] = []
+        for incident in self._incidents:
+            if incident.get("service_id") != service_id:
+                continue
+            if normalized_environment and incident.get("environment") not in {None, "", normalized_environment}:
+                continue
+
+            score = _incident_score(incident, normalized_query, normalized_environment)
+            if score == 0:
+                continue
+            results.append({
+                "incident": incident,
+                "score": score,
+                "matched_fields": _incident_matched_fields(incident, normalized_query),
+            })
+
+        return sorted(
+            results,
+            key=lambda item: (-item["score"], str(item["incident"].get("occurred_at", ""))),
+        )[:limit]
 
 
 def _matches_service(service: dict[str, Any], normalized_query: str) -> bool:
@@ -221,6 +278,40 @@ def _match_score(normalized_query: str, haystack: list[str]) -> float:
         elif query_terms and any(term in value_terms for term in query_terms):
             best_score = max(best_score, 0.45)
     return best_score
+
+
+def _incident_score(
+    incident: dict[str, Any],
+    normalized_query: str,
+    normalized_environment: str | None,
+) -> float:
+    score = 0.35
+    if normalized_environment and incident.get("environment") == normalized_environment:
+        score += 0.2
+    if not normalized_query:
+        return score
+
+    fields = [
+        str(incident.get("title", "")),
+        str(incident.get("summary", "")),
+        str(incident.get("root_cause", "")),
+        str(incident.get("resolution", "")),
+        *[str(tag) for tag in incident.get("tags", [])],
+    ]
+    return max(score, _match_score(normalized_query, fields))
+
+
+def _incident_matched_fields(incident: dict[str, Any], normalized_query: str) -> list[str]:
+    if not normalized_query:
+        return []
+
+    matched_fields: list[str] = []
+    for field in ["title", "summary", "root_cause", "resolution"]:
+        if _match_score(normalized_query, [str(incident.get(field, ""))]) > 0:
+            matched_fields.append(field)
+    if _match_score(normalized_query, [str(tag) for tag in incident.get("tags", [])]) > 0:
+        matched_fields.append("tags")
+    return matched_fields
 
 
 def validate_catalog(catalog: dict[str, Any]) -> None:

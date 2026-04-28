@@ -23,6 +23,28 @@ class CatalogIngestResponse(BaseModel):
     service_count: int
 
 
+class IncidentIngestRequest(BaseModel):
+    org_id: str = "default"
+    service_id: str
+    environment: str | None = None
+    title: str
+    summary: str = ""
+    root_cause: str | None = None
+    resolution: str | None = None
+    occurred_at: str | None = None
+    links: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+    class Config:
+        extra = "allow"
+
+
+class IncidentIngestResponse(BaseModel):
+    status: str
+    org_id: str
+    incident: dict[str, Any]
+
+
 class ToolContext(BaseModel):
     service_id: str
     environment: str
@@ -91,3 +113,18 @@ class SearchResponse(BaseModel):
     type: str
     result_count: int
     results: list[SearchResult]
+
+
+class SimilarIncidentResult(BaseModel):
+    incident: dict[str, Any]
+    score: float
+    matched_fields: list[str] = Field(default_factory=list)
+
+
+class SimilarIncidentsResponse(BaseModel):
+    org_id: str
+    service_id: str
+    environment: str | None = None
+    query: str
+    incident_count: int
+    incidents: list[SimilarIncidentResult]

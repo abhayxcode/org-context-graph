@@ -11,10 +11,13 @@ from org_context_graph.models import (
     CatalogIngestResponse,
     EnvironmentResponse,
     HealthResponse,
+    IncidentIngestRequest,
+    IncidentIngestResponse,
     ResolveResponse,
     SearchResponse,
     ServiceListResponse,
     ServiceResponse,
+    SimilarIncidentsResponse,
 )
 from org_context_graph.service_catalog import (
     CatalogValidationError,
@@ -140,13 +143,68 @@ def create_app(catalog_path: str | Path | None = None) -> FastAPI:
             "service_count": len(catalog.services()),
         }
 
+    @app.post(
+        "/v1/ingest/incident",
+        response_model=IncidentIngestResponse,
+    )
+    def ingest_incident(payload: IncidentIngestRequest) -> dict[str, object]:
+        payload_dict = _model_to_dict(payload)
+        org_id = str(payload_dict.pop("org_id", "default"))
+        if org_id != catalog.org_id:
+            raise HTTPException(status_code=404, detail="catalog not found")
+
+        try:
+            incident = catalog.ingest_incident(payload_dict)
+        except CatalogValidationError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
+        return {
+            "status": "accepted",
+            "org_id": catalog.org_id,
+            "incident": incident,
+        }
+
+    @app.get(
+        "/v1/incidents/similar",
+        response_model=SimilarIncidentsResponse,
+        response_model_exclude_none=True,
+    )
+    def similar_incidents(
+        service_id: str,
+        q: str = "",
+        environment: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=25)] = 5,
+        org_id: str = "default",
+    ) -> dict[str, object]:
+        if org_id != catalog.org_id:
+            raise HTTPException(status_code=404, detail="catalog not found")
+        if catalog.get_service(org_id=org_id, service_id=service_id) is None:
+            raise HTTPException(status_code=404, detail="service not found")
+
+        normalized_environment = normalize_environment(environment) if environment else None
+        incidents = catalog.similar_incidents(
+            org_id=org_id,
+            service_id=service_id,
+            query=q,
+            environment=normalized_environment,
+            limit=limit,
+        )
+        return {
+            "org_id": catalog.org_id,
+            "service_id": service_id,
+            "environment": normalized_environment,
+            "query": q,
+            "incident_count": len(incidents),
+            "incidents": incidents,
+        }
+
     return app
 
 
 app = create_app()
 
 
-def _model_to_dict(model: CatalogIngestRequest) -> dict:
+def _model_to_dict(model: CatalogIngestRequest | IncidentIngestRequest) -> dict:
     if hasattr(model, "model_dump"):
         return model.model_dump()
     return model.dict()

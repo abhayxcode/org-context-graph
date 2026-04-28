@@ -117,6 +117,56 @@ class ServiceCatalogTest(unittest.TestCase):
 
         self.assertEqual(results, [])
 
+    def test_ingest_incident_adds_memory(self) -> None:
+        incident = self.catalog.ingest_incident({
+            "service_id": "backend",
+            "environment": "production",
+            "title": "Database timeout during checkout",
+            "summary": "Backend timed out while calling postgres-main.",
+            "tags": ["database", "timeout"],
+        })
+
+        self.assertEqual(incident["id"], "incident-1")
+        self.assertEqual(incident["environment"], "prod")
+        self.assertEqual(self.catalog.incidents()[0]["title"], "Database timeout during checkout")
+
+    def test_ingest_incident_rejects_unknown_service(self) -> None:
+        with self.assertRaisesRegex(CatalogValidationError, "does not exist"):
+            self.catalog.ingest_incident({
+                "service_id": "payments",
+                "title": "Unknown service incident",
+            })
+
+    def test_similar_incidents_finds_prior_diagnosis(self) -> None:
+        self.catalog.ingest_incident({
+            "service_id": "backend",
+            "environment": "prod",
+            "title": "Database timeout during checkout",
+            "summary": "Backend timed out while calling postgres-main.",
+            "root_cause": "Connection pool saturation",
+            "resolution": "Raised pool limit and restarted workers.",
+            "tags": ["database", "timeout"],
+        })
+
+        incidents = self.catalog.similar_incidents(
+            org_id="default",
+            service_id="backend",
+            query="database timeout",
+            environment="prod",
+        )
+
+        self.assertEqual(incidents[0]["incident"]["title"], "Database timeout during checkout")
+        self.assertIn("title", incidents[0]["matched_fields"])
+
+    def test_similar_incidents_unknown_service_returns_empty(self) -> None:
+        incidents = self.catalog.similar_incidents(
+            org_id="default",
+            service_id="payments",
+            query="timeout",
+        )
+
+        self.assertEqual(incidents, [])
+
     def test_rejects_missing_org_id(self) -> None:
         with self.assertRaisesRegex(CatalogValidationError, "org_id is required"):
             ServiceCatalog({"services": [{"id": "backend"}]})
