@@ -17,6 +17,7 @@ from org_context_graph.models import (
     HealthResponse,
     IncidentIngestRequest,
     IncidentIngestResponse,
+    OwnerResponse,
     ResolveResponse,
     SearchResponse,
     ServiceListResponse,
@@ -137,6 +138,24 @@ class ApiTest(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 404)
         self.assertEqual(context.exception.detail, "service not found")
+
+    def test_get_owner(self) -> None:
+        route = _route(self.app, "/v1/owners/{team_id}")
+        body = _serialized_response(route, route.endpoint(team_id="team-platform"))
+
+        self.assertEqual(route.response_model, OwnerResponse)
+        self.assertEqual(body["id"], "team-platform")
+        self.assertEqual(body["github_team"], "acme/platform")
+        self.assertEqual(body["services"], ["backend"])
+
+    def test_get_owner_404(self) -> None:
+        route = _route(self.app, "/v1/owners/{team_id}")
+
+        with self.assertRaises(HTTPException) as context:
+            route.endpoint(team_id="team-missing")
+
+        self.assertEqual(context.exception.status_code, 404)
+        self.assertEqual(context.exception.detail, "owner not found")
 
     def test_get_environment_returns_tool_context(self) -> None:
         route = _route(self.app, "/v1/services/{service_id}/environments/{environment}")
@@ -323,6 +342,7 @@ environments:
         self.assertIn("HealthResponse", schema["components"]["schemas"])
         self.assertIn("IncidentIngestRequest", schema["components"]["schemas"])
         self.assertIn("IncidentIngestResponse", schema["components"]["schemas"])
+        self.assertIn("OwnerResponse", schema["components"]["schemas"])
         self.assertIn("ResolveResponse", schema["components"]["schemas"])
         self.assertIn("SearchResponse", schema["components"]["schemas"])
         self.assertIn("SearchResult", schema["components"]["schemas"])

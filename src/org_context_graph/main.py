@@ -14,6 +14,7 @@ from org_context_graph.models import (
     HealthResponse,
     IncidentIngestRequest,
     IncidentIngestResponse,
+    OwnerResponse,
     ResolveResponse,
     SearchResponse,
     ServiceListResponse,
@@ -104,6 +105,18 @@ def create_app(
         if service is None:
             raise HTTPException(status_code=404, detail="service not found")
         return service
+
+    @app.get(
+        "/v1/owners/{team_id}",
+        response_model=OwnerResponse,
+        response_model_exclude_none=True,
+        response_model_exclude_unset=True,
+    )
+    def get_owner(team_id: str, org_id: str = "default") -> dict[str, object]:
+        owner = catalog.get_owner(org_id=org_id, team_id=team_id)
+        if owner is None:
+            raise HTTPException(status_code=404, detail="owner not found")
+        return owner
 
     @app.get(
         "/v1/services/{service_id}/environments/{environment}",

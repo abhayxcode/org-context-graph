@@ -1,5 +1,15 @@
 {
   "org_id": "default",
+  "teams": [
+    {
+      "id": "team-platform",
+      "name": "Platform Team",
+      "github_team": "acme/platform",
+      "slack_channel": "#team-platform",
+      "oncall": "platform-primary",
+      "members": ["alice", "bob"]
+    }
+  ],
   "services": [
     {
       "id": "backend",

@@ -99,6 +99,20 @@ class ServiceListResponse(BaseModel):
     services: list[ServiceResponse]
 
 
+class OwnerResponse(BaseModel):
+    id: str
+    name: str | None = None
+    github_team: str | None = None
+    slack_channel: str | None = None
+    oncall: str | None = None
+    members: list[str] = Field(default_factory=list)
+    services: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        extra = "allow"
+
+
 class EnvironmentResponse(BaseModel):
     service_id: str
     environment: str

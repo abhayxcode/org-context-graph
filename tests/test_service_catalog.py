@@ -91,6 +91,15 @@ class ServiceCatalogTest(unittest.TestCase):
         self.assertEqual(repository["full_name"], "acme/backend")
         self.assertEqual(repository["default_branch"], "main")
 
+    def test_get_owner_returns_team_metadata_and_services(self) -> None:
+        owner = self.catalog.get_owner(org_id="default", team_id="team-platform")
+
+        assert owner is not None
+        self.assertEqual(owner["id"], "team-platform")
+        self.assertEqual(owner["github_team"], "acme/platform")
+        self.assertEqual(owner["slack_channel"], "#team-platform")
+        self.assertEqual(owner["services"], ["backend"])
+
     def test_parse_repository_variants(self) -> None:
         self.assertEqual(parse_repository("github.com/acme/backend")["full_name"], "acme/backend")
         self.assertEqual(parse_repository("https://github.com/acme/backend")["full_name"], "acme/backend")
@@ -232,6 +241,15 @@ class ServiceCatalogTest(unittest.TestCase):
         service["playbooks"] = [{"id": "timeout"}]
         with self.assertRaisesRegex(CatalogValidationError, "playbooks\\[0\\].title is required"):
             ServiceCatalog({"org_id": "default", "services": [service]})
+
+    def test_rejects_invalid_team(self) -> None:
+        catalog = {
+            "org_id": "default",
+            "teams": [{"name": "Platform Team"}],
+            "services": [_valid_service("backend")],
+        }
+        with self.assertRaisesRegex(CatalogValidationError, "teams\\[0\\].id is required"):
+            ServiceCatalog(catalog)
 
 def _valid_service(service_id: str) -> dict:
     return {

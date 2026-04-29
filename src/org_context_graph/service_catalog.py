@@ -51,6 +51,9 @@ class ServiceCatalog:
     def services(self) -> list[dict[str, Any]]:
         return list(self.catalog.get("services", []))
 
+    def teams(self) -> list[dict[str, Any]]:
+        return list(self.catalog.get("teams", []))
+
     def incidents(self) -> list[dict[str, Any]]:
         return list(self._incidents)
 
@@ -60,6 +63,31 @@ class ServiceCatalog:
         for service in self.services():
             if service.get("id") == service_id:
                 return service
+        return None
+
+    def get_owner(self, org_id: str, team_id: str) -> dict[str, Any] | None:
+        if org_id != self.org_id:
+            return None
+
+        owned_services = [
+            str(service["id"])
+            for service in self.services()
+            if team_id in service.get("owners", [])
+        ]
+        for team in self.teams():
+            if team.get("id") == team_id:
+                return {
+                    **team,
+                    "services": owned_services,
+                    "metadata": team.get("metadata", {}),
+                }
+
+        if owned_services:
+            return {
+                "id": team_id,
+                "services": owned_services,
+                "metadata": {},
+            }
         return None
 
     def resolve(self, *, org_id: str, query: str, environment: str) -> dict[str, Any]:
@@ -350,6 +378,9 @@ def validate_catalog(catalog: dict[str, Any]) -> None:
         errors.append("services must be a non-empty list")
         raise CatalogValidationError("; ".join(errors))
 
+    for team_index, team in enumerate(catalog.get("teams", [])):
+        errors.extend(_validate_team(team, f"teams[{team_index}]"))
+
     seen_service_ids: set[str] = set()
     for index, service in enumerate(services):
         prefix = f"services[{index}]"
@@ -411,6 +442,18 @@ def _validate_repository(repository: dict[str, Any], prefix: str) -> list[str]:
         errors.append(f"{prefix}.name is required")
     if repository.get("provider") and str(repository.get("provider")).strip() != "github":
         errors.append(f"{prefix}.provider currently supports only github")
+    return errors
+
+
+def _validate_team(team: dict[str, Any], prefix: str) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(team, dict):
+        return [f"{prefix} must be an object"]
+    if not str(team.get("id", "")).strip():
+        errors.append(f"{prefix}.id is required")
+    for list_field in ["members"]:
+        if list_field in team and not isinstance(team.get(list_field), list):
+            errors.append(f"{prefix}.{list_field} must be a list")
     return errors
 
 

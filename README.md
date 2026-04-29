@@ -38,6 +38,7 @@ ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
 - `GET /v1/resolve?q=backend&environment=prod`
 - `GET /v1/search?q=oncall&type=runbook`
 - `GET /v1/incidents/similar?service_id=backend&q=timeout`
+- `GET /v1/owners/{team_id}`
 - `GET /v1/services`
 - `GET /v1/services/{service_id}`
 - `GET /v1/services/{service_id}/environments/{environment}`
@@ -69,7 +70,7 @@ Resolved responses include `tool_context`:
 - suggested PR reviewers
 - `tool_arguments` keyed by Tool Control Plane capability/action, such as `code_host.get_recent_changes`, `ci.get_checks`, and `runtime.get_workload_status`
 
-Catalogs are validated at load time. Invalid catalog data fails fast for missing org IDs, duplicate service IDs, missing owners/repos, unsupported repository providers, missing environments, and non-normalized environment names.
+Catalogs are validated at load time. Invalid catalog data fails fast for missing org IDs, duplicate service IDs, malformed teams, missing owners/repos, unsupported repository providers, missing environments, and non-normalized environment names.
 
 ## Test
 
