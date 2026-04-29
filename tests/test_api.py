@@ -20,6 +20,8 @@ from org_context_graph.models import (
     IncidentIngestRequest,
     IncidentIngestResponse,
     OwnerResponse,
+    RepoIngestRequest,
+    RepoIngestResponse,
     RepoContextResponse,
     ResolveResponse,
     SearchResponse,
@@ -390,6 +392,49 @@ environments:
         self.assertEqual(context.exception.status_code, 422)
         self.assertIn("does not exist", context.exception.detail)
 
+    def test_ingest_repo_index_and_search_code(self) -> None:
+        ingest_route = _route(self.app, "/v1/ingest/repo")
+        search_route = _route(self.app, "/v1/search")
+        payload = RepoIngestRequest(
+            repository="acme/backend",
+            entries=[
+                {
+                    "path": "src/health.ts",
+                    "symbol": "checkBackendHealth",
+                    "summary": "Checks backend health and database reachability.",
+                    "language": "typescript",
+                    "kind": "function",
+                },
+                {
+                    "path": "src/config.ts",
+                    "summary": "token = \"supersecretvalue\"",
+                },
+            ],
+        )
+
+        body = _serialized_response(ingest_route, ingest_route.endpoint(payload=payload))
+        search = _serialized_response(
+            search_route,
+            search_route.endpoint(q="database reachability", result_type="code"),
+        )
+
+        self.assertEqual(ingest_route.response_model, RepoIngestResponse)
+        self.assertEqual(body["status"], "accepted_with_rejections")
+        self.assertEqual(body["indexed_count"], 1)
+        self.assertEqual(body["rejected_count"], 1)
+        self.assertEqual(search["results"][0]["type"], "code")
+        self.assertEqual(search["results"][0]["metadata"]["symbol"], "checkBackendHealth")
+
+    def test_ingest_repo_index_unknown_repo(self) -> None:
+        ingest_route = _route(self.app, "/v1/ingest/repo")
+        payload = RepoIngestRequest(repository="acme/payments", entries=[])
+
+        with self.assertRaises(HTTPException) as context:
+            ingest_route.endpoint(payload=payload)
+
+        self.assertEqual(context.exception.status_code, 404)
+        self.assertEqual(context.exception.detail, "repository not found")
+
     def test_similar_incidents_unknown_service(self) -> None:
         route = _route(self.app, "/v1/incidents/similar")
 
@@ -412,6 +457,8 @@ environments:
         self.assertIn("IncidentIngestRequest", schema["components"]["schemas"])
         self.assertIn("IncidentIngestResponse", schema["components"]["schemas"])
         self.assertIn("OwnerResponse", schema["components"]["schemas"])
+        self.assertIn("RepoIngestRequest", schema["components"]["schemas"])
+        self.assertIn("RepoIngestResponse", schema["components"]["schemas"])
         self.assertIn("RepoContextResponse", schema["components"]["schemas"])
         self.assertIn("ResolveResponse", schema["components"]["schemas"])
         self.assertIn("SearchResponse", schema["components"]["schemas"])

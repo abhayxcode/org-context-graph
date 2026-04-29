@@ -17,6 +17,8 @@ from org_context_graph.models import (
     IncidentIngestRequest,
     IncidentIngestResponse,
     OwnerResponse,
+    RepoIngestRequest,
+    RepoIngestResponse,
     RepoContextResponse,
     ResolveResponse,
     SearchResponse,
@@ -233,6 +235,26 @@ def create_app(
             "incident": incident,
         }
 
+    @app.post(
+        "/v1/ingest/repo",
+        response_model=RepoIngestResponse,
+    )
+    def ingest_repo(payload: RepoIngestRequest) -> dict[str, object]:
+        payload_dict = _model_to_dict(payload)
+        org_id = str(payload_dict.pop("org_id", "default"))
+        entries = payload_dict.pop("entries", [])
+        result = catalog.ingest_repo_index(
+            org_id=org_id,
+            repository=str(payload_dict["repository"]),
+            service_id=payload_dict.get("service_id"),
+            entries=entries,
+        )
+        if result is None:
+            raise HTTPException(status_code=404, detail="repository not found")
+
+        store.save(catalog.to_dict())
+        return result
+
     @app.get(
         "/v1/incidents/similar",
         response_model=SimilarIncidentsResponse,
@@ -273,7 +295,7 @@ def create_app(
 app = create_app()
 
 
-def _model_to_dict(model: CatalogIngestRequest | IncidentIngestRequest) -> dict:
+def _model_to_dict(model: CatalogIngestRequest | IncidentIngestRequest | RepoIngestRequest) -> dict:
     if hasattr(model, "model_dump"):
         return model.model_dump()
     return model.dict()

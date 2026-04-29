@@ -48,6 +48,7 @@ ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
 - `POST /v1/ingest/service-catalog`
 - `POST /v1/ingest/service-catalog/yaml`
 - `POST /v1/ingest/incident`
+- `POST /v1/ingest/repo`
 
 `POST /v1/ingest/service-catalog` validates a service catalog payload and replaces the active catalog only after validation succeeds. When the app is backed by `ORG_CONTEXT_CATALOG_PATH` or the default JSON catalog path, accepted catalog and incident changes are persisted back to that JSON file through the catalog store boundary.
 
@@ -56,6 +57,8 @@ ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
 FastAPI response models define the public contract for health, search, service listing, service lookup, environment lookup, service catalog ingest, and service resolution responses. The generated OpenAPI schema includes `CatalogIngestRequest`, `CatalogIngestResponse`, `EnvironmentResponse`, `HealthResponse`, `ResolveResponse`, `SearchResponse`, `SearchResult`, `ServiceListResponse`, `ServiceResponse`, and the nested `ToolContext` model.
 
 Search is deterministic in v1 and covers service names, aliases, repositories, owners, team/channel routing, runbooks, playbooks, and dependencies. Vector-backed RAG can replace the implementation later without changing the API contract.
+
+`POST /v1/ingest/repo` stores code metadata only: repository, service, path, symbol, language, kind, summary, and metadata. Raw source code is not stored. Entries are rejected when a lightweight secret scan finds likely keys, tokens, passwords, or private keys.
 
 Incident memory is stored in the active catalog store in the current phase. `POST /v1/ingest/incident` records a prior diagnosis for a known service, and `GET /v1/incidents/similar` returns deterministic matches by service, environment, title, summary, root cause, resolution, and tags. Postgres persistence and vector similarity are planned for later phases.
 

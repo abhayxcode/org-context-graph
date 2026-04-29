@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,6 +57,9 @@ class ServiceCatalog:
 
     def incidents(self) -> list[dict[str, Any]]:
         return list(self._incidents)
+
+    def code_index(self) -> list[dict[str, Any]]:
+        return list(self.catalog.get("code_index", []))
 
     def validation_warnings(self) -> list[dict[str, Any]]:
         return catalog_warnings(self.catalog)
@@ -213,8 +217,64 @@ class ServiceCatalog:
         results: list[dict[str, Any]] = []
         for service in self.services():
             results.extend(_search_service(service, normalized_query, result_type, self.teams()))
+        results.extend(_search_code_index(self.code_index(), normalized_query, result_type))
 
         return sorted(results, key=lambda item: (-item["score"], item["type"], item["title"]))[:limit]
+
+    def ingest_repo_index(
+        self,
+        *,
+        org_id: str,
+        repository: str,
+        service_id: str | None,
+        entries: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        if org_id != self.org_id:
+            return None
+
+        repo_context = self.get_repo_context(org_id=org_id, repository_id=repository)
+        if repo_context is None:
+            return None
+
+        resolved_service_id = service_id or str(repo_context["service"]["id"])
+        if self.get_service(org_id=org_id, service_id=resolved_service_id) is None:
+            raise CatalogValidationError(f"service_id '{resolved_service_id}' does not exist")
+
+        repository_name = str(repo_context["repository"].get("full_name") or repository)
+        accepted: list[dict[str, Any]] = []
+        rejected: list[dict[str, Any]] = []
+        for entry in entries:
+            reason = _code_index_rejection_reason(entry)
+            if reason:
+                rejected.append({
+                    "path": entry.get("path", ""),
+                    "reason": reason,
+                })
+                continue
+
+            accepted.append(_normalize_code_index_entry(
+                entry,
+                repository=repository_name,
+                service_id=resolved_service_id,
+            ))
+
+        existing = [
+            entry for entry in self.code_index()
+            if not (
+                entry.get("repository") == repository_name
+                and entry.get("service_id") == resolved_service_id
+            )
+        ]
+        self.catalog["code_index"] = [*existing, *accepted]
+        return {
+            "status": "accepted" if not rejected else "accepted_with_rejections",
+            "org_id": self.org_id,
+            "repository": repository_name,
+            "service_id": resolved_service_id,
+            "indexed_count": len(accepted),
+            "rejected_count": len(rejected),
+            "rejected": rejected,
+        }
 
     def ingest_incident(self, incident: dict[str, Any]) -> dict[str, Any]:
         normalized_incident = dict(incident)
@@ -398,6 +458,45 @@ def _search_service(
     return results
 
 
+def _search_code_index(
+    entries: list[dict[str, Any]],
+    normalized_query: str,
+    result_type: str,
+) -> list[dict[str, Any]]:
+    if result_type.strip().lower() not in {"all", "code"}:
+        return []
+
+    results: list[dict[str, Any]] = []
+    for entry in entries:
+        score = _match_score(normalized_query, [
+            str(entry.get("path", "")),
+            str(entry.get("symbol", "")),
+            str(entry.get("summary", "")),
+            str(entry.get("language", "")),
+            str(entry.get("kind", "")),
+        ])
+        if score == 0:
+            continue
+        path = str(entry.get("path", ""))
+        symbol = str(entry.get("symbol") or path)
+        results.append({
+            "type": "code",
+            "service_id": str(entry.get("service_id", "")),
+            "title": symbol,
+            "reference": f"{entry.get('repository', '')}:{path}",
+            "score": score,
+            "metadata": {
+                "repository": entry.get("repository"),
+                "path": path,
+                "symbol": entry.get("symbol"),
+                "language": entry.get("language"),
+                "kind": entry.get("kind"),
+                "summary": entry.get("summary"),
+            },
+        })
+    return results
+
+
 def _owner_terms(service: dict[str, Any], teams: list[dict[str, Any]]) -> list[str]:
     terms: list[str] = []
     for owner_id in service.get("owners", []):
@@ -475,6 +574,49 @@ def _infer_dependency_kind(target: str) -> str:
     if "queue" in normalized or "kafka" in normalized or "pubsub" in normalized:
         return "queue"
     return "external"
+
+
+SECRET_PATTERNS = [
+    re.compile(r"AKIA[0-9A-Z]{16}"),
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    re.compile(r"(?i)(api[_-]?key|secret|token|password)\s*[:=]\s*['\"][^'\"]{8,}['\"]"),
+]
+
+
+def _normalize_code_index_entry(
+    entry: dict[str, Any],
+    *,
+    repository: str,
+    service_id: str,
+) -> dict[str, Any]:
+    return {
+        "repository": repository,
+        "service_id": service_id,
+        "path": str(entry.get("path", "")).strip(),
+        "symbol": entry.get("symbol"),
+        "summary": str(entry.get("summary", "")),
+        "language": entry.get("language"),
+        "kind": entry.get("kind"),
+        "metadata": entry.get("metadata", {}),
+    }
+
+
+def _code_index_rejection_reason(entry: dict[str, Any]) -> str | None:
+    if not str(entry.get("path", "")).strip():
+        return "path is required"
+    if _contains_secret(entry):
+        return "entry appears to contain a secret"
+    return None
+
+
+def _contains_secret(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any(_contains_secret(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_secret(item) for item in value)
+    if not isinstance(value, str):
+        return False
+    return any(pattern.search(value) for pattern in SECRET_PATTERNS)
 
 
 def _match_score(normalized_query: str, haystack: list[str]) -> float:

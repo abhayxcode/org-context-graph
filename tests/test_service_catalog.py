@@ -238,6 +238,49 @@ class ServiceCatalogTest(unittest.TestCase):
         self.assertEqual(results[0]["type"], "owner")
         self.assertEqual(results[0]["reference"], "team-platform")
 
+    def test_ingest_repo_index_adds_searchable_code_metadata(self) -> None:
+        result = self.catalog.ingest_repo_index(
+            org_id="default",
+            repository="acme/backend",
+            service_id=None,
+            entries=[
+                {
+                    "path": "src/health.ts",
+                    "symbol": "checkBackendHealth",
+                    "summary": "Checks backend health and database reachability.",
+                    "language": "typescript",
+                    "kind": "function",
+                }
+            ],
+        )
+        results = self.catalog.search(org_id="default", query="database reachability", result_type="code")
+
+        assert result is not None
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(result["indexed_count"], 1)
+        self.assertEqual(self.catalog.code_index()[0]["symbol"], "checkBackendHealth")
+        self.assertEqual(results[0]["type"], "code")
+        self.assertEqual(results[0]["metadata"]["path"], "src/health.ts")
+
+    def test_ingest_repo_index_rejects_secret_like_entries(self) -> None:
+        result = self.catalog.ingest_repo_index(
+            org_id="default",
+            repository="acme/backend",
+            service_id=None,
+            entries=[
+                {
+                    "path": "src/config.ts",
+                    "summary": "api_key = \"supersecretvalue\"",
+                }
+            ],
+        )
+
+        assert result is not None
+        self.assertEqual(result["status"], "accepted_with_rejections")
+        self.assertEqual(result["indexed_count"], 0)
+        self.assertEqual(result["rejected_count"], 1)
+        self.assertEqual(self.catalog.code_index(), [])
+
     def test_search_unknown_org_returns_empty(self) -> None:
         results = self.catalog.search(org_id="missing", query="backend")
 

@@ -54,6 +54,35 @@ class IncidentIngestResponse(BaseModel):
     incident: dict[str, Any]
 
 
+class CodeIndexEntry(BaseModel):
+    path: str
+    symbol: str | None = None
+    summary: str = ""
+    language: str | None = None
+    kind: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        extra = "allow"
+
+
+class RepoIngestRequest(BaseModel):
+    org_id: str = "default"
+    repository: str
+    service_id: str | None = None
+    entries: list[CodeIndexEntry]
+
+
+class RepoIngestResponse(BaseModel):
+    status: str
+    org_id: str
+    repository: str
+    service_id: str | None = None
+    indexed_count: int
+    rejected_count: int
+    rejected: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class ToolContext(BaseModel):
     service_id: str
     environment: str
