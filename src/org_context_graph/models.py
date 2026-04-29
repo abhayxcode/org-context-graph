@@ -133,6 +133,20 @@ class EnvironmentResponse(BaseModel):
     tool_context: ToolContext
 
 
+class DependencyRecord(BaseModel):
+    target: str
+    kind: str = "external"
+    criticality: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class DependencyResponse(BaseModel):
+    org_id: str
+    service_id: str
+    dependencies: list[DependencyRecord] = Field(default_factory=list)
+    dependents: list[str] = Field(default_factory=list)
+
+
 class SearchResult(BaseModel):
     type: str
     service_id: str

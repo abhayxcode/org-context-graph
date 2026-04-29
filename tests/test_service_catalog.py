@@ -135,6 +135,40 @@ class ServiceCatalogTest(unittest.TestCase):
         assert context is not None
         self.assertEqual(context["service"]["id"], "backend")
 
+    def test_get_dependencies_normalizes_dependencies(self) -> None:
+        dependencies = self.catalog.get_dependencies(org_id="default", service_id="backend")
+
+        assert dependencies is not None
+        self.assertEqual(dependencies["service_id"], "backend")
+        self.assertEqual(
+            dependencies["dependencies"],
+            [
+                {
+                    "target": "postgres-main",
+                    "kind": "database",
+                    "criticality": None,
+                    "metadata": {},
+                },
+                {
+                    "target": "redis-cache",
+                    "kind": "cache",
+                    "criticality": None,
+                    "metadata": {},
+                },
+            ],
+        )
+
+    def test_get_dependencies_tracks_dependents(self) -> None:
+        backend = _valid_service("backend")
+        worker = _valid_service("worker")
+        worker["dependencies"] = [{"target": "backend", "kind": "api", "criticality": "high"}]
+        catalog = ServiceCatalog({"org_id": "default", "services": [backend, worker]})
+
+        dependencies = catalog.get_dependencies(org_id="default", service_id="backend")
+
+        assert dependencies is not None
+        self.assertEqual(dependencies["dependents"], ["worker"])
+
     def test_parse_repository_variants(self) -> None:
         self.assertEqual(parse_repository("github.com/acme/backend")["full_name"], "acme/backend")
         self.assertEqual(parse_repository("https://github.com/acme/backend")["full_name"], "acme/backend")
@@ -160,6 +194,7 @@ class ServiceCatalogTest(unittest.TestCase):
 
         self.assertEqual(results[0]["type"], "dependency")
         self.assertEqual(results[0]["reference"], "postgres-main")
+        self.assertEqual(results[0]["metadata"]["kind"], "database")
 
     def test_search_finds_repository(self) -> None:
         results = self.catalog.search(

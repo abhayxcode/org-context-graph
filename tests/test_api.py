@@ -13,6 +13,7 @@ from org_context_graph.main import create_app
 from org_context_graph.models import (
     CatalogIngestRequest,
     CatalogIngestResponse,
+    DependencyResponse,
     EnvironmentResponse,
     HealthResponse,
     IncidentIngestRequest,
@@ -185,6 +186,24 @@ class ApiTest(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 404)
         self.assertEqual(context.exception.detail, "repository not found")
+
+    def test_get_dependencies(self) -> None:
+        route = _route(self.app, "/v1/services/{service_id}/dependencies")
+        body = _serialized_response(route, route.endpoint(service_id="backend"))
+
+        self.assertEqual(route.response_model, DependencyResponse)
+        self.assertEqual(body["service_id"], "backend")
+        self.assertEqual(body["dependencies"][0]["target"], "postgres-main")
+        self.assertEqual(body["dependencies"][0]["kind"], "database")
+
+    def test_get_dependencies_404(self) -> None:
+        route = _route(self.app, "/v1/services/{service_id}/dependencies")
+
+        with self.assertRaises(HTTPException) as context:
+            route.endpoint(service_id="payments")
+
+        self.assertEqual(context.exception.status_code, 404)
+        self.assertEqual(context.exception.detail, "service not found")
 
     def test_get_environment_returns_tool_context(self) -> None:
         route = _route(self.app, "/v1/services/{service_id}/environments/{environment}")
@@ -367,6 +386,8 @@ environments:
 
         self.assertIn("CatalogIngestRequest", schema["components"]["schemas"])
         self.assertIn("CatalogIngestResponse", schema["components"]["schemas"])
+        self.assertIn("DependencyResponse", schema["components"]["schemas"])
+        self.assertIn("DependencyRecord", schema["components"]["schemas"])
         self.assertIn("EnvironmentResponse", schema["components"]["schemas"])
         self.assertIn("HealthResponse", schema["components"]["schemas"])
         self.assertIn("IncidentIngestRequest", schema["components"]["schemas"])

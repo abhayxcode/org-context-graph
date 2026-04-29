@@ -42,6 +42,7 @@ ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
 - `GET /v1/repos/{repo_id}/context`
 - `GET /v1/services`
 - `GET /v1/services/{service_id}`
+- `GET /v1/services/{service_id}/dependencies`
 - `GET /v1/services/{service_id}/environments/{environment}`
 - `POST /v1/ingest/service-catalog`
 - `POST /v1/ingest/service-catalog/yaml`

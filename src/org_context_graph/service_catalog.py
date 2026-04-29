@@ -120,6 +120,27 @@ class ServiceCatalog:
                     }
         return None
 
+    def get_dependencies(self, org_id: str, service_id: str) -> dict[str, Any] | None:
+        service = self.get_service(org_id=org_id, service_id=service_id)
+        if service is None:
+            return None
+
+        dependents = [
+            str(candidate["id"])
+            for candidate in self.services()
+            if candidate.get("id") != service_id
+            and service_id in [_dependency_target(dependency) for dependency in candidate.get("dependencies", [])]
+        ]
+        return {
+            "org_id": self.org_id,
+            "service_id": service_id,
+            "dependencies": [
+                _normalize_dependency(dependency)
+                for dependency in service.get("dependencies", [])
+            ],
+            "dependents": sorted(dependents),
+        }
+
     def resolve(self, *, org_id: str, query: str, environment: str) -> dict[str, Any]:
         if org_id != self.org_id:
             return {
@@ -332,7 +353,22 @@ def _search_service(
         add_result("runbook", str(runbook).rsplit("/", 1)[-1], str(runbook), [str(runbook), service_name])
 
     for dependency in service.get("dependencies", []):
-        add_result("dependency", str(dependency), str(dependency), [str(dependency), service_name])
+        normalized_dependency = _normalize_dependency(dependency)
+        add_result(
+            "dependency",
+            normalized_dependency["target"],
+            normalized_dependency["target"],
+            [
+                normalized_dependency["target"],
+                normalized_dependency["kind"],
+                normalized_dependency.get("criticality", ""),
+                service_name,
+            ],
+            {
+                "kind": normalized_dependency["kind"],
+                "criticality": normalized_dependency.get("criticality"),
+            },
+        )
 
     for playbook in service.get("playbooks", []):
         playbook_id = str(playbook.get("id", ""))
@@ -397,6 +433,45 @@ def _channel_terms(values: list[Any]) -> list[str]:
         if normalized.startswith("#"):
             terms.append(normalized[1:])
     return terms
+
+
+def _normalize_dependency(dependency: Any) -> dict[str, Any]:
+    if isinstance(dependency, dict):
+        target = str(dependency.get("target") or dependency.get("id") or "").strip()
+        metadata = {
+            key: value
+            for key, value in dependency.items()
+            if key not in {"target", "id", "kind", "criticality"}
+        }
+        return {
+            "target": target,
+            "kind": str(dependency.get("kind") or _infer_dependency_kind(target)),
+            "criticality": dependency.get("criticality"),
+            "metadata": metadata,
+        }
+
+    target = str(dependency).strip()
+    return {
+        "target": target,
+        "kind": _infer_dependency_kind(target),
+        "criticality": None,
+        "metadata": {},
+    }
+
+
+def _dependency_target(dependency: Any) -> str:
+    return _normalize_dependency(dependency)["target"]
+
+
+def _infer_dependency_kind(target: str) -> str:
+    normalized = target.lower()
+    if "postgres" in normalized or "mysql" in normalized or "db" in normalized:
+        return "database"
+    if "redis" in normalized or "cache" in normalized:
+        return "cache"
+    if "queue" in normalized or "kafka" in normalized or "pubsub" in normalized:
+        return "queue"
+    return "external"
 
 
 def _match_score(normalized_query: str, haystack: list[str]) -> float:

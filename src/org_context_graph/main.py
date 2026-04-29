@@ -10,6 +10,7 @@ from org_context_graph.catalog_loader import CatalogParseError, parse_catalog_ya
 from org_context_graph.models import (
     CatalogIngestRequest,
     CatalogIngestResponse,
+    DependencyResponse,
     EnvironmentResponse,
     HealthResponse,
     IncidentIngestRequest,
@@ -129,6 +130,17 @@ def create_app(
         if context is None:
             raise HTTPException(status_code=404, detail="repository not found")
         return context
+
+    @app.get(
+        "/v1/services/{service_id}/dependencies",
+        response_model=DependencyResponse,
+        response_model_exclude_none=True,
+    )
+    def get_dependencies(service_id: str, org_id: str = "default") -> dict[str, object]:
+        dependencies = catalog.get_dependencies(org_id=org_id, service_id=service_id)
+        if dependencies is None:
+            raise HTTPException(status_code=404, detail="service not found")
+        return dependencies
 
     @app.get(
         "/v1/services/{service_id}/environments/{environment}",
