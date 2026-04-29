@@ -13,6 +13,7 @@ from org_context_graph.main import create_app
 from org_context_graph.models import (
     CatalogIngestRequest,
     CatalogIngestResponse,
+    CatalogValidationResponse,
     DependencyResponse,
     EnvironmentResponse,
     HealthResponse,
@@ -43,6 +44,16 @@ class ApiTest(unittest.TestCase):
 
         self.assertEqual(route.response_model, HealthResponse)
         self.assertEqual(body, {"status": "ok"})
+
+    def test_catalog_validation(self) -> None:
+        route = _route(self.app, "/v1/catalog/validation")
+        body = _serialized_response(route, route.endpoint())
+
+        self.assertEqual(route.response_model, CatalogValidationResponse)
+        self.assertEqual(body["status"], "ok")
+        self.assertEqual(body["org_id"], "default")
+        self.assertEqual(body["warning_count"], 0)
+        self.assertEqual(body["warnings"], [])
 
     def test_resolve_returns_tool_context(self) -> None:
         route = _route(self.app, "/v1/resolve")
@@ -238,7 +249,10 @@ class ApiTest(unittest.TestCase):
         resolved = resolve_route.endpoint(q="payments", environment="prod")
 
         self.assertEqual(ingest_route.response_model, CatalogIngestResponse)
-        self.assertEqual(body, {"status": "accepted", "org_id": "default", "service_count": 1})
+        self.assertEqual(body["status"], "accepted_with_warnings")
+        self.assertEqual(body["org_id"], "default")
+        self.assertEqual(body["service_count"], 1)
+        self.assertIn("missing_runbooks", {warning["code"] for warning in body["warnings"]})
         self.assertEqual(resolved["status"], "resolved")
         self.assertEqual(resolved["service"]["id"], "payments")
         self.assertEqual(self.store.load()["services"][0]["id"], "payments")
@@ -282,7 +296,9 @@ services:
         body = _serialized_response(ingest_route, ingest_route.endpoint(payload=payload))
         resolved = resolve_route.endpoint(q="payments", environment="prod")
 
-        self.assertEqual(body, {"status": "accepted", "org_id": "default", "service_count": 1})
+        self.assertEqual(body["status"], "accepted_with_warnings")
+        self.assertEqual(body["org_id"], "default")
+        self.assertEqual(body["service_count"], 1)
         self.assertEqual(resolved["status"], "resolved")
         self.assertEqual(resolved["service"]["id"], "payments")
         self.assertEqual(self.store.load()["services"][0]["id"], "payments")
@@ -311,7 +327,9 @@ environments:
             ingest_route.endpoint(payload=payload, org_id="acme"),
         )
 
-        self.assertEqual(body, {"status": "accepted", "org_id": "acme", "service_count": 1})
+        self.assertEqual(body["status"], "accepted_with_warnings")
+        self.assertEqual(body["org_id"], "acme")
+        self.assertEqual(body["service_count"], 1)
         self.assertEqual(self.store.load()["org_id"], "acme")
         self.assertEqual(self.store.load()["services"][0]["id"], "search")
 
@@ -386,6 +404,7 @@ environments:
 
         self.assertIn("CatalogIngestRequest", schema["components"]["schemas"])
         self.assertIn("CatalogIngestResponse", schema["components"]["schemas"])
+        self.assertIn("CatalogValidationResponse", schema["components"]["schemas"])
         self.assertIn("DependencyResponse", schema["components"]["schemas"])
         self.assertIn("DependencyRecord", schema["components"]["schemas"])
         self.assertIn("EnvironmentResponse", schema["components"]["schemas"])

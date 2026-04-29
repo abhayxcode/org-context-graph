@@ -10,6 +10,7 @@ from org_context_graph.catalog_loader import CatalogParseError, parse_catalog_ya
 from org_context_graph.models import (
     CatalogIngestRequest,
     CatalogIngestResponse,
+    CatalogValidationResponse,
     DependencyResponse,
     EnvironmentResponse,
     HealthResponse,
@@ -47,6 +48,22 @@ def create_app(
     @app.get("/healthz", response_model=HealthResponse)
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get(
+        "/v1/catalog/validation",
+        response_model=CatalogValidationResponse,
+    )
+    def catalog_validation(org_id: str = "default") -> dict[str, object]:
+        if org_id != catalog.org_id:
+            raise HTTPException(status_code=404, detail="catalog not found")
+        warnings = catalog.validation_warnings()
+        return {
+            "status": "ok" if not warnings else "warning",
+            "org_id": catalog.org_id,
+            "service_count": len(catalog.services()),
+            "warning_count": len(warnings),
+            "warnings": warnings,
+        }
 
     @app.get(
         "/v1/resolve",
@@ -273,8 +290,10 @@ def _replace_catalog(payload: dict, store: CatalogStore) -> ServiceCatalog:
 
 
 def _catalog_ingest_response(catalog: ServiceCatalog) -> dict[str, object]:
+    warnings = catalog.validation_warnings()
     return {
-        "status": "accepted",
+        "status": "accepted" if not warnings else "accepted_with_warnings",
         "org_id": catalog.org_id,
         "service_count": len(catalog.services()),
+        "warnings": warnings,
     }

@@ -35,6 +35,7 @@ ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
 ## APIs
 
 - `GET /healthz`
+- `GET /v1/catalog/validation`
 - `GET /v1/resolve?q=backend&environment=prod`
 - `GET /v1/search?q=oncall&type=runbook`
 - `GET /v1/incidents/similar?service_id=backend&q=timeout`
@@ -74,6 +75,8 @@ Resolved responses include `tool_context`:
 - `tool_arguments` keyed by Tool Control Plane capability/action, such as `code_host.get_recent_changes`, `ci.get_checks`, and `runtime.get_workload_status`
 
 Catalogs are validated at load time. Invalid catalog data fails fast for missing org IDs, duplicate service IDs, malformed teams, missing owners/repos, unsupported repository providers, missing environments, and non-normalized environment names.
+
+Non-blocking validation warnings are available through `GET /v1/catalog/validation` and catalog ingest responses. Warnings identify incomplete optional context such as missing runbooks, playbooks, test commands, channels, observability, CI metadata, or team metadata.
 
 ## Test
 

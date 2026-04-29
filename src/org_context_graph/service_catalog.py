@@ -57,6 +57,9 @@ class ServiceCatalog:
     def incidents(self) -> list[dict[str, Any]]:
         return list(self._incidents)
 
+    def validation_warnings(self) -> list[dict[str, Any]]:
+        return catalog_warnings(self.catalog)
+
     def get_service(self, org_id: str, service_id: str) -> dict[str, Any] | None:
         if org_id != self.org_id:
             return None
@@ -587,6 +590,67 @@ def validate_catalog(catalog: dict[str, Any]) -> None:
 
     if errors:
         raise CatalogValidationError("; ".join(errors))
+
+
+def catalog_warnings(catalog: dict[str, Any]) -> list[dict[str, Any]]:
+    warnings: list[dict[str, Any]] = []
+    teams = {
+        str(team.get("id"))
+        for team in catalog.get("teams", [])
+        if isinstance(team, dict) and team.get("id")
+    }
+
+    for index, service in enumerate(catalog.get("services", [])):
+        if not isinstance(service, dict):
+            continue
+        service_id = str(service.get("id", f"services[{index}]"))
+        prefix = f"services[{index}]"
+        if not service.get("runbooks"):
+            warnings.append(_catalog_warning(prefix, service_id, "missing_runbooks", "service has no runbooks"))
+        if not service.get("playbooks"):
+            warnings.append(_catalog_warning(prefix, service_id, "missing_playbooks", "service has no troubleshooting playbooks"))
+        if not service.get("test_commands"):
+            warnings.append(_catalog_warning(prefix, service_id, "missing_test_commands", "service has no test commands"))
+        if not service.get("channels"):
+            warnings.append(_catalog_warning(prefix, service_id, "missing_channels", "service has no team or service channels"))
+        for owner in service.get("owners", []):
+            if teams and owner not in teams:
+                warnings.append(_catalog_warning(
+                    prefix,
+                    service_id,
+                    "unknown_owner",
+                    f"owner '{owner}' has no team metadata",
+                ))
+
+        for environment_name, environment_config in service.get("environments", {}).items():
+            if not isinstance(environment_config, dict):
+                continue
+            env_prefix = f"{prefix}.environments.{environment_name}"
+            if not environment_config.get("observability"):
+                warnings.append(_catalog_warning(
+                    env_prefix,
+                    service_id,
+                    "missing_observability",
+                    f"environment '{environment_name}' has no observability targets",
+                ))
+            if not environment_config.get("ci"):
+                warnings.append(_catalog_warning(
+                    env_prefix,
+                    service_id,
+                    "missing_ci",
+                    f"environment '{environment_name}' has no CI/deploy metadata",
+                ))
+
+    return warnings
+
+
+def _catalog_warning(path: str, service_id: str, code: str, message: str) -> dict[str, Any]:
+    return {
+        "path": path,
+        "service_id": service_id,
+        "code": code,
+        "message": message,
+    }
 
 
 def _validate_repository(repository: dict[str, Any], prefix: str) -> list[str]:

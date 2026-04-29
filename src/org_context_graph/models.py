@@ -21,6 +21,15 @@ class CatalogIngestResponse(BaseModel):
     status: str
     org_id: str
     service_count: int
+    warnings: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class CatalogValidationResponse(BaseModel):
+    status: str
+    org_id: str
+    service_count: int
+    warning_count: int
+    warnings: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class IncidentIngestRequest(BaseModel):

@@ -6,6 +6,7 @@ from pathlib import Path
 from org_context_graph.service_catalog import (
     CatalogValidationError,
     ServiceCatalog,
+    catalog_warnings,
     normalize_environment,
     parse_repository,
     primary_repository,
@@ -241,6 +242,21 @@ class ServiceCatalogTest(unittest.TestCase):
         results = self.catalog.search(org_id="missing", query="backend")
 
         self.assertEqual(results, [])
+
+    def test_catalog_warnings_reports_missing_optional_context(self) -> None:
+        service = _valid_service("backend")
+        warnings = catalog_warnings({"org_id": "default", "services": [service]})
+
+        codes = {warning["code"] for warning in warnings}
+        self.assertIn("missing_runbooks", codes)
+        self.assertIn("missing_playbooks", codes)
+        self.assertIn("missing_test_commands", codes)
+        self.assertIn("missing_channels", codes)
+        self.assertIn("missing_observability", codes)
+        self.assertIn("missing_ci", codes)
+
+    def test_catalog_warnings_empty_for_sample_catalog(self) -> None:
+        self.assertEqual(self.catalog.validation_warnings(), [])
 
     def test_ingest_incident_adds_memory(self) -> None:
         incident = self.catalog.ingest_incident({
