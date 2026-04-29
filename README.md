@@ -53,7 +53,7 @@ ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
 
 FastAPI response models define the public contract for health, search, service listing, service lookup, environment lookup, service catalog ingest, and service resolution responses. The generated OpenAPI schema includes `CatalogIngestRequest`, `CatalogIngestResponse`, `EnvironmentResponse`, `HealthResponse`, `ResolveResponse`, `SearchResponse`, `SearchResult`, `ServiceListResponse`, `ServiceResponse`, and the nested `ToolContext` model.
 
-Search is deterministic in v1 and covers service names, aliases, repositories, owners, runbooks, playbooks, and dependencies. Vector-backed RAG can replace the implementation later without changing the API contract.
+Search is deterministic in v1 and covers service names, aliases, repositories, owners, team/channel routing, runbooks, playbooks, and dependencies. Vector-backed RAG can replace the implementation later without changing the API contract.
 
 Incident memory is stored in the active catalog store in the current phase. `POST /v1/ingest/incident` records a prior diagnosis for a known service, and `GET /v1/incidents/similar` returns deterministic matches by service, environment, title, summary, root cause, resolution, and tags. Postgres persistence and vector similarity are planned for later phases.
 
@@ -61,6 +61,7 @@ Resolved responses include `tool_context`:
 
 - service and environment
 - owners
+- service/team channels
 - primary repository metadata
 - runtime targets
 - observability targets

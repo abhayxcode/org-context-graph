@@ -132,7 +132,7 @@ class ServiceCatalog:
         normalized_env = normalize_environment(environment)
         candidates = [
             service for service in self.services()
-            if _matches_service(service, normalized_query)
+            if _matches_service(service, normalized_query, self.teams())
         ]
 
         if not candidates:
@@ -188,7 +188,7 @@ class ServiceCatalog:
 
         results: list[dict[str, Any]] = []
         for service in self.services():
-            results.extend(_search_service(service, normalized_query, result_type))
+            results.extend(_search_service(service, normalized_query, result_type, self.teams()))
 
         return sorted(results, key=lambda item: (-item["score"], item["type"], item["title"]))[:limit]
 
@@ -246,13 +246,19 @@ class ServiceCatalog:
         )[:limit]
 
 
-def _matches_service(service: dict[str, Any], normalized_query: str) -> bool:
+def _matches_service(
+    service: dict[str, Any],
+    normalized_query: str,
+    teams: list[dict[str, Any]] | None = None,
+) -> bool:
     aliases = [str(alias).lower() for alias in service.get("aliases", [])]
     repositories = [_repository_name(repository).lower() for repository in service.get("repositories", [])]
     return (
         str(service.get("id", "")).lower() == normalized_query
         or str(service.get("name", "")).lower() == normalized_query
         or normalized_query in aliases
+        or normalized_query in _channel_terms(service.get("channels", []))
+        or normalized_query in _owner_terms(service, teams or [])
         or normalized_query in repositories
         or normalized_query in [repo.rsplit("/", 1)[-1].lower() for repo in service.get("repos", [])]
     )
@@ -262,6 +268,7 @@ def _search_service(
     service: dict[str, Any],
     normalized_query: str,
     result_type: str,
+    teams: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     allowed_type = result_type.strip().lower()
     results: list[dict[str, Any]] = []
@@ -297,6 +304,8 @@ def _search_service(
             str(service.get("id", "")),
             service_name,
             *[str(alias) for alias in service.get("aliases", [])],
+            *[str(channel) for channel in service.get("channels", [])],
+            *_owner_terms(service, teams or []),
         ],
         {"owners": service.get("owners", [])},
     )
@@ -314,7 +323,10 @@ def _search_service(
     )
 
     for owner in service.get("owners", []):
-        add_result("owner", str(owner), str(owner), [str(owner), service_name])
+        add_result("owner", str(owner), str(owner), [str(owner), *_team_terms(str(owner), teams or []), service_name])
+
+    for channel in service.get("channels", []):
+        add_result("channel", str(channel), str(channel), [str(channel), service_name])
 
     for runbook in service.get("runbooks", []):
         add_result("runbook", str(runbook).rsplit("/", 1)[-1], str(runbook), [str(runbook), service_name])
@@ -345,6 +357,46 @@ def _search_service(
         )
 
     return results
+
+
+def _owner_terms(service: dict[str, Any], teams: list[dict[str, Any]]) -> list[str]:
+    terms: list[str] = []
+    for owner_id in service.get("owners", []):
+        owner = str(owner_id)
+        terms.append(owner.lower())
+        terms.extend(_team_terms(owner, teams))
+    return terms
+
+
+def _team_terms(team_id: str, teams: list[dict[str, Any]]) -> list[str]:
+    for team in teams:
+        if team.get("id") != team_id:
+            continue
+        values = [
+            team.get("id", ""),
+            team.get("name", ""),
+            team.get("github_team", ""),
+            team.get("slack_channel", ""),
+            team.get("oncall", ""),
+        ]
+        return [
+            term
+            for value in values
+            for term in _channel_terms([str(value)])
+        ]
+    return []
+
+
+def _channel_terms(values: list[Any]) -> list[str]:
+    terms: list[str] = []
+    for value in values:
+        normalized = str(value).strip().lower()
+        if not normalized:
+            continue
+        terms.append(normalized)
+        if normalized.startswith("#"):
+            terms.append(normalized[1:])
+    return terms
 
 
 def _match_score(normalized_query: str, haystack: list[str]) -> float:
@@ -428,7 +480,7 @@ def validate_catalog(catalog: dict[str, Any]) -> None:
         if not isinstance(owners, list) or not owners:
             errors.append(f"{prefix}.owners must be a non-empty list")
 
-        for list_field in ["build_commands", "test_commands", "suggested_reviewers"]:
+        for list_field in ["channels", "build_commands", "test_commands", "suggested_reviewers"]:
             if list_field in service and not isinstance(service.get(list_field), list):
                 errors.append(f"{prefix}.{list_field} must be a list")
 
@@ -516,6 +568,7 @@ def build_tool_context(
         "service_id": service.get("id"),
         "environment": environment,
         "owners": service.get("owners", []),
+        "channels": service.get("channels", []),
         "repository": repository,
         "runtime": runtime,
         "observability": observability,

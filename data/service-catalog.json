@@ -16,6 +16,7 @@
       "name": "Backend API",
       "aliases": ["backend", "api", "backend-api"],
       "owners": ["team-platform"],
+      "channels": ["#backend-api"],
       "repos": ["github.com/acme/backend"],
       "build_commands": ["npm install", "npm run build"],
       "test_commands": ["npm test"],

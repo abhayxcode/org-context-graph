@@ -48,6 +48,21 @@ class ServiceCatalogTest(unittest.TestCase):
         self.assertEqual(result["status"], "resolved")
         self.assertEqual(result["service"]["id"], "backend")
 
+    def test_resolves_by_owner_team(self) -> None:
+        result = self.catalog.resolve(org_id="default", query="team-platform", environment="prod")
+        self.assertEqual(result["status"], "resolved")
+        self.assertEqual(result["service"]["id"], "backend")
+
+    def test_resolves_by_owner_slack_channel(self) -> None:
+        result = self.catalog.resolve(org_id="default", query="#team-platform", environment="prod")
+        self.assertEqual(result["status"], "resolved")
+        self.assertEqual(result["service"]["id"], "backend")
+
+    def test_resolves_by_service_channel(self) -> None:
+        result = self.catalog.resolve(org_id="default", query="#backend-api", environment="prod")
+        self.assertEqual(result["status"], "resolved")
+        self.assertEqual(result["service"]["id"], "backend")
+
     def test_tool_context_contains_tool_arguments(self) -> None:
         result = self.catalog.resolve(org_id="default", query="backend", environment="prod")
         tool_arguments = result["tool_context"]["tool_arguments"]
@@ -75,6 +90,7 @@ class ServiceCatalogTest(unittest.TestCase):
         self.assertEqual(tool_context["build_commands"], ["npm install", "npm run build"])
         self.assertEqual(tool_context["test_commands"], ["npm test"])
         self.assertEqual(tool_context["suggested_reviewers"], ["team-platform"])
+        self.assertEqual(tool_context["channels"], ["#backend-api"])
 
     def test_tool_context_contains_playbooks(self) -> None:
         result = self.catalog.resolve(org_id="default", query="backend", environment="prod")
@@ -166,6 +182,26 @@ class ServiceCatalogTest(unittest.TestCase):
         self.assertEqual(results[0]["reference"], "backend-timeout")
         self.assertEqual(results[0]["metadata"]["tags"], ["timeout", "database", "restart"])
 
+    def test_search_finds_channels(self) -> None:
+        results = self.catalog.search(
+            org_id="default",
+            query="#backend-api",
+            result_type="channel",
+        )
+
+        self.assertEqual(results[0]["type"], "channel")
+        self.assertEqual(results[0]["reference"], "#backend-api")
+
+    def test_search_finds_owner_by_slack_channel(self) -> None:
+        results = self.catalog.search(
+            org_id="default",
+            query="#team-platform",
+            result_type="owner",
+        )
+
+        self.assertEqual(results[0]["type"], "owner")
+        self.assertEqual(results[0]["reference"], "team-platform")
+
     def test_search_unknown_org_returns_empty(self) -> None:
         results = self.catalog.search(org_id="missing", query="backend")
 
@@ -253,6 +289,12 @@ class ServiceCatalogTest(unittest.TestCase):
         service = _valid_service("backend")
         service["test_commands"] = "npm test"
         with self.assertRaisesRegex(CatalogValidationError, "test_commands must be a list"):
+            ServiceCatalog({"org_id": "default", "services": [service]})
+
+    def test_rejects_invalid_channels(self) -> None:
+        service = _valid_service("backend")
+        service["channels"] = "#backend"
+        with self.assertRaisesRegex(CatalogValidationError, "channels must be a list"):
             ServiceCatalog({"org_id": "default", "services": [service]})
 
     def test_rejects_invalid_playbook(self) -> None:

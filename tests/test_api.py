@@ -52,6 +52,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(body["status"], "resolved")
         self.assertEqual(body["environment"], "prod")
         self.assertEqual(body["tool_context"]["repository"]["full_name"], "acme/backend")
+        self.assertEqual(body["tool_context"]["channels"], ["#backend-api"])
         self.assertEqual(body["tool_context"]["playbooks"][0]["id"], "backend-timeout")
         self.assertEqual(body["tool_context"]["test_commands"], ["npm test"])
         self.assertEqual(body["tool_context"]["suggested_reviewers"], ["team-platform"])
@@ -69,6 +70,14 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(body["candidates"], [])
         self.assertNotIn("service", body)
         self.assertNotIn("tool_context", body)
+
+    def test_resolve_by_slack_channel(self) -> None:
+        route = _route(self.app, "/v1/resolve")
+        raw_body = route.endpoint(q="#team-platform", environment="prod")
+        body = _serialized_response(route, raw_body)
+
+        self.assertEqual(body["status"], "resolved")
+        self.assertEqual(body["service"]["id"], "backend")
 
     def test_search_returns_catalog_results(self) -> None:
         route = _route(self.app, "/v1/search")

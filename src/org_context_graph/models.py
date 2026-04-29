@@ -49,6 +49,7 @@ class ToolContext(BaseModel):
     service_id: str
     environment: str
     owners: list[str] = Field(default_factory=list)
+    channels: list[str] = Field(default_factory=list)
     repository: dict[str, Any] = Field(default_factory=dict)
     runtime: dict[str, Any] = Field(default_factory=dict)
     observability: dict[str, Any] = Field(default_factory=dict)
@@ -79,6 +80,7 @@ class ServiceResponse(BaseModel):
     name: str
     aliases: list[str] = Field(default_factory=list)
     owners: list[str] = Field(default_factory=list)
+    channels: list[str] = Field(default_factory=list)
     repos: list[str] = Field(default_factory=list)
     repositories: list[dict[str, Any]] = Field(default_factory=list)
     environments: dict[str, dict[str, Any]]
