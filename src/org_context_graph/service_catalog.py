@@ -90,6 +90,36 @@ class ServiceCatalog:
             }
         return None
 
+    def get_repo_context(self, org_id: str, repository_id: str) -> dict[str, Any] | None:
+        if org_id != self.org_id:
+            return None
+
+        normalized_repo = _normalize_repository_id(repository_id)
+        for service in self.services():
+            repositories = [
+                primary_repository(service),
+                *[parse_repository(str(repo)) for repo in service.get("repos", [])],
+                *[dict(repo) for repo in service.get("repositories", [])],
+            ]
+            for repository in repositories:
+                if _repository_matches(repository, normalized_repo):
+                    owners = [
+                        owner
+                        for owner_id in service.get("owners", [])
+                        if (owner := self.get_owner(org_id=org_id, team_id=str(owner_id))) is not None
+                    ]
+                    return {
+                        "org_id": self.org_id,
+                        "repository": _hydrate_repository(repository),
+                        "service": service,
+                        "owners": owners,
+                        "environments": sorted(service.get("environments", {}).keys()),
+                        "build_commands": service.get("build_commands", []),
+                        "test_commands": service.get("test_commands", []),
+                        "suggested_reviewers": service.get("suggested_reviewers", service.get("owners", [])),
+                    }
+        return None
+
     def resolve(self, *, org_id: str, query: str, environment: str) -> dict[str, Any]:
         if org_id != self.org_id:
             return {
@@ -548,6 +578,38 @@ def primary_repository(service: dict[str, Any]) -> dict[str, Any]:
     if not repos:
         return {}
     return parse_repository(str(repos[0]))
+
+
+def _normalize_repository_id(value: str) -> str:
+    repository = parse_repository(value)
+    if repository.get("full_name"):
+        return str(repository["full_name"]).lower()
+    return value.strip().removesuffix(".git").lower()
+
+
+def _repository_matches(repository: dict[str, Any], normalized_repo: str) -> bool:
+    hydrated = _hydrate_repository(repository)
+    candidates = {
+        str(hydrated.get("full_name", "")).lower(),
+        str(hydrated.get("url", "")).removesuffix(".git").lower(),
+        str(hydrated.get("name", "")).lower(),
+    }
+    return normalized_repo in candidates
+
+
+def _hydrate_repository(repository: dict[str, Any]) -> dict[str, Any]:
+    if repository.get("full_name") or not repository.get("owner") or not repository.get("name"):
+        return dict(repository)
+
+    hydrated = dict(repository)
+    host = str(hydrated.get("host", "github.com")).strip() or "github.com"
+    owner = str(hydrated["owner"]).strip()
+    name = str(hydrated["name"]).strip()
+    hydrated.setdefault("provider", "github" if host == "github.com" else host)
+    hydrated.setdefault("host", host)
+    hydrated.setdefault("full_name", f"{owner}/{name}")
+    hydrated.setdefault("url", f"https://{host}/{owner}/{name}")
+    return hydrated
 
 
 def parse_repository(value: str) -> dict[str, Any]:

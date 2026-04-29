@@ -100,6 +100,25 @@ class ServiceCatalogTest(unittest.TestCase):
         self.assertEqual(owner["slack_channel"], "#team-platform")
         self.assertEqual(owner["services"], ["backend"])
 
+    def test_get_repo_context(self) -> None:
+        context = self.catalog.get_repo_context(org_id="default", repository_id="acme/backend")
+
+        assert context is not None
+        self.assertEqual(context["repository"]["full_name"], "acme/backend")
+        self.assertEqual(context["service"]["id"], "backend")
+        self.assertEqual(context["owners"][0]["id"], "team-platform")
+        self.assertEqual(context["environments"], ["prod", "staging"])
+        self.assertEqual(context["test_commands"], ["npm test"])
+
+    def test_get_repo_context_accepts_url(self) -> None:
+        context = self.catalog.get_repo_context(
+            org_id="default",
+            repository_id="https://github.com/acme/backend",
+        )
+
+        assert context is not None
+        self.assertEqual(context["service"]["id"], "backend")
+
     def test_parse_repository_variants(self) -> None:
         self.assertEqual(parse_repository("github.com/acme/backend")["full_name"], "acme/backend")
         self.assertEqual(parse_repository("https://github.com/acme/backend")["full_name"], "acme/backend")

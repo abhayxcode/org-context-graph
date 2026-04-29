@@ -15,6 +15,7 @@ from org_context_graph.models import (
     IncidentIngestRequest,
     IncidentIngestResponse,
     OwnerResponse,
+    RepoContextResponse,
     ResolveResponse,
     SearchResponse,
     ServiceListResponse,
@@ -117,6 +118,17 @@ def create_app(
         if owner is None:
             raise HTTPException(status_code=404, detail="owner not found")
         return owner
+
+    @app.get(
+        "/v1/repos/{repo_id}/context",
+        response_model=RepoContextResponse,
+        response_model_exclude_unset=True,
+    )
+    def get_repo_context(repo_id: str, org_id: str = "default") -> dict[str, object]:
+        context = catalog.get_repo_context(org_id=org_id, repository_id=repo_id)
+        if context is None:
+            raise HTTPException(status_code=404, detail="repository not found")
+        return context
 
     @app.get(
         "/v1/services/{service_id}/environments/{environment}",

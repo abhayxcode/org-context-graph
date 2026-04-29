@@ -18,6 +18,7 @@ from org_context_graph.models import (
     IncidentIngestRequest,
     IncidentIngestResponse,
     OwnerResponse,
+    RepoContextResponse,
     ResolveResponse,
     SearchResponse,
     ServiceListResponse,
@@ -156,6 +157,25 @@ class ApiTest(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 404)
         self.assertEqual(context.exception.detail, "owner not found")
+
+    def test_get_repo_context(self) -> None:
+        route = _route(self.app, "/v1/repos/{repo_id}/context")
+        body = _serialized_response(route, route.endpoint(repo_id="acme/backend"))
+
+        self.assertEqual(route.response_model, RepoContextResponse)
+        self.assertEqual(body["repository"]["full_name"], "acme/backend")
+        self.assertEqual(body["service"]["id"], "backend")
+        self.assertEqual(body["owners"][0]["id"], "team-platform")
+        self.assertEqual(body["test_commands"], ["npm test"])
+
+    def test_get_repo_context_404(self) -> None:
+        route = _route(self.app, "/v1/repos/{repo_id}/context")
+
+        with self.assertRaises(HTTPException) as context:
+            route.endpoint(repo_id="acme/payments")
+
+        self.assertEqual(context.exception.status_code, 404)
+        self.assertEqual(context.exception.detail, "repository not found")
 
     def test_get_environment_returns_tool_context(self) -> None:
         route = _route(self.app, "/v1/services/{service_id}/environments/{environment}")
@@ -343,6 +363,7 @@ environments:
         self.assertIn("IncidentIngestRequest", schema["components"]["schemas"])
         self.assertIn("IncidentIngestResponse", schema["components"]["schemas"])
         self.assertIn("OwnerResponse", schema["components"]["schemas"])
+        self.assertIn("RepoContextResponse", schema["components"]["schemas"])
         self.assertIn("ResolveResponse", schema["components"]["schemas"])
         self.assertIn("SearchResponse", schema["components"]["schemas"])
         self.assertIn("SearchResult", schema["components"]["schemas"])

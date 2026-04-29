@@ -113,6 +113,17 @@ class OwnerResponse(BaseModel):
         extra = "allow"
 
 
+class RepoContextResponse(BaseModel):
+    org_id: str
+    repository: dict[str, Any]
+    service: ServiceResponse
+    owners: list[OwnerResponse] = Field(default_factory=list)
+    environments: list[str] = Field(default_factory=list)
+    build_commands: list[str] = Field(default_factory=list)
+    test_commands: list[str] = Field(default_factory=list)
+    suggested_reviewers: list[str] = Field(default_factory=list)
+
+
 class EnvironmentResponse(BaseModel):
     service_id: str
     environment: str
