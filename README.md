@@ -45,6 +45,8 @@ ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
 - `GET /v1/services/{service_id}`
 - `GET /v1/services/{service_id}/dependencies`
 - `GET /v1/services/{service_id}/environments/{environment}`
+- `GET /v1/services/{service_id}/health`
+- `POST /v1/ingest/health`
 - `POST /v1/ingest/service-catalog`
 - `POST /v1/ingest/service-catalog/yaml`
 - `POST /v1/ingest/incident`
@@ -59,6 +61,8 @@ FastAPI response models define the public contract for health, search, service l
 Search is deterministic in v1 and covers service names, aliases, repositories, owners, team/channel routing, runbooks, playbooks, and dependencies. Vector-backed RAG can replace the implementation later without changing the API contract.
 
 `POST /v1/ingest/repo` stores code metadata only: repository, service, path, symbol, language, kind, summary, and metadata. Raw source code is not stored. Entries are rejected when a lightweight secret scan finds likely keys, tokens, passwords, or private keys.
+
+`POST /v1/ingest/health` stores cached health snapshots produced by external tools. Org Context Graph does not probe runtime systems directly; live checks still belong to Tool Control Plane providers.
 
 Incident memory is stored in the active catalog store in the current phase. `POST /v1/ingest/incident` records a prior diagnosis for a known service, and `GET /v1/incidents/similar` returns deterministic matches by service, environment, title, summary, root cause, resolution, and tags. Postgres persistence and vector similarity are planned for later phases.
 

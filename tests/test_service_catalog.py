@@ -170,6 +170,46 @@ class ServiceCatalogTest(unittest.TestCase):
         assert dependencies is not None
         self.assertEqual(dependencies["dependents"], ["worker"])
 
+    def test_ingest_health_snapshot(self) -> None:
+        snapshot = self.catalog.ingest_health_snapshot({
+            "service_id": "backend",
+            "environment": "production",
+            "status": "healthy",
+            "summary": "All checks passing.",
+            "checked_at": "2026-07-11T10:00:00Z",
+            "signals": {"checks": 3},
+            "source": "tool-control-plane",
+        })
+        health = self.catalog.get_health_summary(
+            org_id="default",
+            service_id="backend",
+            environment="prod",
+        )
+
+        self.assertEqual(snapshot["environment"], "prod")
+        assert health is not None
+        self.assertEqual(health["status"], "healthy")
+        self.assertEqual(health["signals"], {"checks": 3})
+
+    def test_get_health_summary_returns_unknown_without_snapshot(self) -> None:
+        health = self.catalog.get_health_summary(
+            org_id="default",
+            service_id="backend",
+            environment="prod",
+        )
+
+        assert health is not None
+        self.assertEqual(health["status"], "unknown")
+        self.assertEqual(health["summary"], "No cached health snapshot is available.")
+
+    def test_ingest_health_snapshot_rejects_unknown_environment(self) -> None:
+        with self.assertRaisesRegex(CatalogValidationError, "has no 'qa' environment"):
+            self.catalog.ingest_health_snapshot({
+                "service_id": "backend",
+                "environment": "qa",
+                "status": "healthy",
+            })
+
     def test_parse_repository_variants(self) -> None:
         self.assertEqual(parse_repository("github.com/acme/backend")["full_name"], "acme/backend")
         self.assertEqual(parse_repository("https://github.com/acme/backend")["full_name"], "acme/backend")

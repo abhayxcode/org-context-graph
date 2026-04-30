@@ -61,6 +61,9 @@ class ServiceCatalog:
     def code_index(self) -> list[dict[str, Any]]:
         return list(self.catalog.get("code_index", []))
 
+    def health_snapshots(self) -> dict[str, Any]:
+        return dict(self.catalog.get("health", {}))
+
     def validation_warnings(self) -> list[dict[str, Any]]:
         return catalog_warnings(self.catalog)
 
@@ -146,6 +149,56 @@ class ServiceCatalog:
                 for dependency in service.get("dependencies", [])
             ],
             "dependents": sorted(dependents),
+        }
+
+    def ingest_health_snapshot(self, snapshot: dict[str, Any]) -> dict[str, Any]:
+        normalized_snapshot = dict(snapshot)
+        service_id = str(normalized_snapshot.get("service_id", "")).strip()
+        if self.get_service(org_id=self.org_id, service_id=service_id) is None:
+            raise CatalogValidationError(f"service_id '{service_id}' does not exist")
+
+        environment = normalize_environment(str(normalized_snapshot.get("environment", "prod")))
+        service = self.get_service(org_id=self.org_id, service_id=service_id)
+        assert service is not None
+        if environment not in service.get("environments", {}):
+            raise CatalogValidationError(f"service_id '{service_id}' has no '{environment}' environment")
+
+        normalized_snapshot["service_id"] = service_id
+        normalized_snapshot["environment"] = environment
+        normalized_snapshot.setdefault("summary", "")
+        normalized_snapshot.setdefault("signals", {})
+        self.catalog.setdefault("health", {})[_health_key(service_id, environment)] = normalized_snapshot
+        return normalized_snapshot
+
+    def get_health_summary(
+        self,
+        *,
+        org_id: str,
+        service_id: str,
+        environment: str,
+    ) -> dict[str, Any] | None:
+        service = self.get_service(org_id=org_id, service_id=service_id)
+        if service is None:
+            return None
+        normalized_environment = normalize_environment(environment)
+        if normalized_environment not in service.get("environments", {}):
+            return None
+
+        snapshot = self.health_snapshots().get(_health_key(service_id, normalized_environment))
+        if snapshot:
+            return {
+                "org_id": self.org_id,
+                **snapshot,
+            }
+        return {
+            "org_id": self.org_id,
+            "service_id": service_id,
+            "environment": normalized_environment,
+            "status": "unknown",
+            "summary": "No cached health snapshot is available.",
+            "checked_at": None,
+            "signals": {},
+            "source": None,
         }
 
     def resolve(self, *, org_id: str, query: str, environment: str) -> dict[str, Any]:
@@ -563,6 +616,10 @@ def _normalize_dependency(dependency: Any) -> dict[str, Any]:
 
 def _dependency_target(dependency: Any) -> str:
     return _normalize_dependency(dependency)["target"]
+
+
+def _health_key(service_id: str, environment: str) -> str:
+    return f"{service_id}:{environment}"
 
 
 def _infer_dependency_kind(target: str) -> str:

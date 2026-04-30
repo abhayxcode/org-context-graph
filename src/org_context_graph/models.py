@@ -83,6 +83,39 @@ class RepoIngestResponse(BaseModel):
     rejected: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class HealthSnapshotIngestRequest(BaseModel):
+    org_id: str = "default"
+    service_id: str
+    environment: str = "prod"
+    status: str
+    summary: str = ""
+    checked_at: str | None = None
+    signals: dict[str, Any] = Field(default_factory=dict)
+    source: str | None = None
+
+    class Config:
+        extra = "allow"
+
+
+class HealthSnapshotIngestResponse(BaseModel):
+    status: str
+    org_id: str
+    service_id: str
+    environment: str
+    snapshot: dict[str, Any]
+
+
+class HealthSummaryResponse(BaseModel):
+    org_id: str
+    service_id: str
+    environment: str
+    status: str
+    summary: str = ""
+    checked_at: str | None = None
+    signals: dict[str, Any] = Field(default_factory=dict)
+    source: str | None = None
+
+
 class ToolContext(BaseModel):
     service_id: str
     environment: str

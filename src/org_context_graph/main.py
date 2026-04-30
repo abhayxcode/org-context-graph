@@ -14,6 +14,9 @@ from org_context_graph.models import (
     DependencyResponse,
     EnvironmentResponse,
     HealthResponse,
+    HealthSnapshotIngestRequest,
+    HealthSnapshotIngestResponse,
+    HealthSummaryResponse,
     IncidentIngestRequest,
     IncidentIngestResponse,
     OwnerResponse,
@@ -162,6 +165,25 @@ def create_app(
         return dependencies
 
     @app.get(
+        "/v1/services/{service_id}/health",
+        response_model=HealthSummaryResponse,
+        response_model_exclude_none=True,
+    )
+    def get_health_summary(
+        service_id: str,
+        environment: str = "prod",
+        org_id: str = "default",
+    ) -> dict[str, object]:
+        health = catalog.get_health_summary(
+            org_id=org_id,
+            service_id=service_id,
+            environment=environment,
+        )
+        if health is None:
+            raise HTTPException(status_code=404, detail="service or environment not found")
+        return health
+
+    @app.get(
         "/v1/services/{service_id}/environments/{environment}",
         response_model=EnvironmentResponse,
     )
@@ -255,6 +277,31 @@ def create_app(
         store.save(catalog.to_dict())
         return result
 
+    @app.post(
+        "/v1/ingest/health",
+        response_model=HealthSnapshotIngestResponse,
+        response_model_exclude_none=True,
+    )
+    def ingest_health(payload: HealthSnapshotIngestRequest) -> dict[str, object]:
+        payload_dict = _model_to_dict(payload)
+        org_id = str(payload_dict.pop("org_id", "default"))
+        if org_id != catalog.org_id:
+            raise HTTPException(status_code=404, detail="catalog not found")
+
+        try:
+            snapshot = catalog.ingest_health_snapshot(payload_dict)
+        except CatalogValidationError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
+        store.save(catalog.to_dict())
+        return {
+            "status": "accepted",
+            "org_id": catalog.org_id,
+            "service_id": snapshot["service_id"],
+            "environment": snapshot["environment"],
+            "snapshot": snapshot,
+        }
+
     @app.get(
         "/v1/incidents/similar",
         response_model=SimilarIncidentsResponse,
@@ -295,7 +342,9 @@ def create_app(
 app = create_app()
 
 
-def _model_to_dict(model: CatalogIngestRequest | IncidentIngestRequest | RepoIngestRequest) -> dict:
+def _model_to_dict(
+    model: CatalogIngestRequest | HealthSnapshotIngestRequest | IncidentIngestRequest | RepoIngestRequest,
+) -> dict:
     if hasattr(model, "model_dump"):
         return model.model_dump()
     return model.dict()

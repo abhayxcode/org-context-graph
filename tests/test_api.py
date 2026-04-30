@@ -17,6 +17,9 @@ from org_context_graph.models import (
     DependencyResponse,
     EnvironmentResponse,
     HealthResponse,
+    HealthSnapshotIngestRequest,
+    HealthSnapshotIngestResponse,
+    HealthSummaryResponse,
     IncidentIngestRequest,
     IncidentIngestResponse,
     OwnerResponse,
@@ -217,6 +220,24 @@ class ApiTest(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 404)
         self.assertEqual(context.exception.detail, "service not found")
+
+    def test_get_health_summary_unknown_without_snapshot(self) -> None:
+        route = _route(self.app, "/v1/services/{service_id}/health")
+        body = _serialized_response(route, route.endpoint(service_id="backend", environment="prod"))
+
+        self.assertEqual(route.response_model, HealthSummaryResponse)
+        self.assertEqual(body["service_id"], "backend")
+        self.assertEqual(body["environment"], "prod")
+        self.assertEqual(body["status"], "unknown")
+
+    def test_get_health_summary_404(self) -> None:
+        route = _route(self.app, "/v1/services/{service_id}/health")
+
+        with self.assertRaises(HTTPException) as context:
+            route.endpoint(service_id="backend", environment="qa")
+
+        self.assertEqual(context.exception.status_code, 404)
+        self.assertEqual(context.exception.detail, "service or environment not found")
 
     def test_get_environment_returns_tool_context(self) -> None:
         route = _route(self.app, "/v1/services/{service_id}/environments/{environment}")
@@ -435,6 +456,42 @@ environments:
         self.assertEqual(context.exception.status_code, 404)
         self.assertEqual(context.exception.detail, "repository not found")
 
+    def test_ingest_health_snapshot(self) -> None:
+        ingest_route = _route(self.app, "/v1/ingest/health")
+        health_route = _route(self.app, "/v1/services/{service_id}/health")
+        payload = HealthSnapshotIngestRequest(
+            service_id="backend",
+            environment="production",
+            status="degraded",
+            summary="Error rate elevated.",
+            checked_at="2026-07-11T10:00:00Z",
+            signals={"error_rate": 0.08},
+            source="tool-control-plane",
+        )
+
+        body = _serialized_response(ingest_route, ingest_route.endpoint(payload=payload))
+        health = _serialized_response(
+            health_route,
+            health_route.endpoint(service_id="backend", environment="prod"),
+        )
+
+        self.assertEqual(ingest_route.response_model, HealthSnapshotIngestResponse)
+        self.assertEqual(body["status"], "accepted")
+        self.assertEqual(body["environment"], "prod")
+        self.assertEqual(health["status"], "degraded")
+        self.assertEqual(health["signals"], {"error_rate": 0.08})
+        self.assertEqual(self.store.load()["health"]["backend:prod"]["status"], "degraded")
+
+    def test_ingest_health_snapshot_unknown_service(self) -> None:
+        ingest_route = _route(self.app, "/v1/ingest/health")
+        payload = HealthSnapshotIngestRequest(service_id="payments", status="healthy")
+
+        with self.assertRaises(HTTPException) as context:
+            ingest_route.endpoint(payload=payload)
+
+        self.assertEqual(context.exception.status_code, 422)
+        self.assertIn("does not exist", context.exception.detail)
+
     def test_similar_incidents_unknown_service(self) -> None:
         route = _route(self.app, "/v1/incidents/similar")
 
@@ -454,6 +511,9 @@ environments:
         self.assertIn("DependencyRecord", schema["components"]["schemas"])
         self.assertIn("EnvironmentResponse", schema["components"]["schemas"])
         self.assertIn("HealthResponse", schema["components"]["schemas"])
+        self.assertIn("HealthSnapshotIngestRequest", schema["components"]["schemas"])
+        self.assertIn("HealthSnapshotIngestResponse", schema["components"]["schemas"])
+        self.assertIn("HealthSummaryResponse", schema["components"]["schemas"])
         self.assertIn("IncidentIngestRequest", schema["components"]["schemas"])
         self.assertIn("IncidentIngestResponse", schema["components"]["schemas"])
         self.assertIn("OwnerResponse", schema["components"]["schemas"])
