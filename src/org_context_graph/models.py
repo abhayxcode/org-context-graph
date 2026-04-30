@@ -128,6 +128,7 @@ class ToolContext(BaseModel):
     runbooks: list[str] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list)
     playbooks: list[dict[str, Any]] = Field(default_factory=list)
+    recent_incidents: list[dict[str, Any]] = Field(default_factory=list)
     build_commands: list[str] = Field(default_factory=list)
     test_commands: list[str] = Field(default_factory=list)
     suggested_reviewers: list[str] = Field(default_factory=list)

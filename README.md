@@ -77,6 +77,7 @@ Resolved responses include `tool_context`:
 - CI metadata
 - runbooks and dependencies
 - troubleshooting playbooks
+- recent related incidents
 - build/test commands
 - suggested PR reviewers
 - `tool_arguments` keyed by Tool Control Plane capability/action, such as `code_host.get_recent_changes`, `ci.get_checks`, and `runtime.get_workload_status`

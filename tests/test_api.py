@@ -372,6 +372,7 @@ environments:
     def test_ingest_incident_and_find_similar(self) -> None:
         ingest_route = _route(self.app, "/v1/ingest/incident")
         similar_route = _route(self.app, "/v1/incidents/similar")
+        resolve_route = _route(self.app, "/v1/resolve")
         payload = IncidentIngestRequest(
             org_id="default",
             service_id="backend",
@@ -391,6 +392,10 @@ environments:
                 environment="prod",
             ),
         )
+        resolved = _serialized_response(
+            resolve_route,
+            resolve_route.endpoint(q="backend", environment="prod"),
+        )
 
         self.assertEqual(ingest_route.response_model, IncidentIngestResponse)
         self.assertEqual(body["status"], "accepted")
@@ -399,6 +404,10 @@ environments:
         self.assertEqual(similar_route.response_model, SimilarIncidentsResponse)
         self.assertEqual(similar["incident_count"], 1)
         self.assertEqual(similar["incidents"][0]["incident"]["title"], "Database timeout during checkout")
+        self.assertEqual(
+            resolved["tool_context"]["recent_incidents"][0]["title"],
+            "Database timeout during checkout",
+        )
 
     def test_ingest_incident_unknown_service(self) -> None:
         ingest_route = _route(self.app, "/v1/ingest/incident")

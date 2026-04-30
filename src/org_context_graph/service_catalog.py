@@ -249,7 +249,16 @@ class ServiceCatalog:
             "service": service,
             "environment": normalized_env,
             "environment_config": environment_config,
-            "tool_context": build_tool_context(service, normalized_env, environment_config),
+            "tool_context": build_tool_context(
+                service,
+                normalized_env,
+                environment_config,
+                recent_incidents=self.recent_incidents(
+                    org_id=org_id,
+                    service_id=str(service["id"]),
+                    environment=normalized_env,
+                ),
+            ),
         }
 
     def search(
@@ -344,6 +353,35 @@ class ServiceCatalog:
         self._incidents.append(normalized_incident)
         self.catalog["incidents"] = self.incidents()
         return normalized_incident
+
+    def recent_incidents(
+        self,
+        *,
+        org_id: str,
+        service_id: str,
+        environment: str | None = None,
+        limit: int = 3,
+    ) -> list[dict[str, Any]]:
+        if org_id != self.org_id:
+            return []
+        if self.get_service(org_id=org_id, service_id=service_id) is None:
+            return []
+
+        normalized_environment = normalize_environment(environment) if environment else None
+        incidents = [
+            incident
+            for incident in self._incidents
+            if incident.get("service_id") == service_id
+            and (
+                not normalized_environment
+                or incident.get("environment") in {None, "", normalized_environment}
+            )
+        ]
+        return sorted(
+            incidents,
+            key=lambda incident: str(incident.get("occurred_at", "")),
+            reverse=True,
+        )[:limit]
 
     def similar_incidents(
         self,
@@ -895,6 +933,7 @@ def build_tool_context(
     service: dict[str, Any],
     environment: str,
     environment_config: dict[str, Any],
+    recent_incidents: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     repository = primary_repository(service)
     repository_name = repository.get("full_name", "")
@@ -914,6 +953,7 @@ def build_tool_context(
         "runbooks": service.get("runbooks", []),
         "dependencies": service.get("dependencies", []),
         "playbooks": service.get("playbooks", []),
+        "recent_incidents": recent_incidents or [],
         "build_commands": service.get("build_commands", []),
         "test_commands": service.get("test_commands", []),
         "suggested_reviewers": service.get("suggested_reviewers", service.get("owners", [])),

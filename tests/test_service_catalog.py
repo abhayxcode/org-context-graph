@@ -354,6 +354,25 @@ class ServiceCatalogTest(unittest.TestCase):
         self.assertEqual(incident["environment"], "prod")
         self.assertEqual(self.catalog.incidents()[0]["title"], "Database timeout during checkout")
 
+    def test_recent_incidents_are_returned_in_resolved_tool_context(self) -> None:
+        self.catalog.ingest_incident({
+            "service_id": "backend",
+            "environment": "prod",
+            "title": "Old timeout",
+            "occurred_at": "2026-07-10T09:00:00Z",
+        })
+        self.catalog.ingest_incident({
+            "service_id": "backend",
+            "environment": "prod",
+            "title": "New timeout",
+            "occurred_at": "2026-07-11T09:00:00Z",
+        })
+
+        result = self.catalog.resolve(org_id="default", query="backend", environment="prod")
+        incidents = result["tool_context"]["recent_incidents"]
+
+        self.assertEqual([incident["title"] for incident in incidents], ["New timeout", "Old timeout"])
+
     def test_ingest_incident_rejects_unknown_service(self) -> None:
         with self.assertRaisesRegex(CatalogValidationError, "does not exist"):
             self.catalog.ingest_incident({
