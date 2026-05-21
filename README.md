@@ -32,6 +32,15 @@ ORG_CONTEXT_CATALOG_PATH=data/service-catalog.json \
   PYTHONPATH=src uvicorn org_context_graph.main:app --port 4200
 ```
 
+Demo catalog:
+
+```bash
+ORG_CONTEXT_CATALOG_PATH=examples/demo-service-catalog.json \
+  PYTHONPATH=src uvicorn org_context_graph.main:app --port 4200
+```
+
+The demo catalog also has a YAML source at `examples/demo-service-catalog.yaml`. Use the JSON file for direct service startup, because the current startup loader reads JSON catalogs. Use the YAML file with `POST /v1/ingest/service-catalog/yaml`.
+
 ## APIs
 
 - `GET /healthz`

@@ -1,0 +1,109 @@
+org_id: default
+teams:
+  - id: team-platform
+    name: Platform Team
+    github_team: majdoor-demo/platform
+    slack_channel: "#team-platform"
+    oncall: platform-primary
+    members:
+      - demo-owner
+services:
+  - id: backend
+    name: Demo Backend API
+    aliases:
+      - backend
+      - api
+      - backend-api
+      - demo backend
+    owners:
+      - team-platform
+    channels:
+      - "#backend-api"
+    repos:
+      - github.com/majdoor-demo/backend
+    build_commands:
+      - npm install
+      - npm run build
+    test_commands:
+      - npm test
+    suggested_reviewers:
+      - team-platform
+    playbooks:
+      - id: backend-ci-node-drift
+        title: Backend CI Node.js drift
+        summary: CI can fail when the workflow Node.js version drifts from package requirements.
+        steps:
+          - Check the latest failing GitHub Actions job logs.
+          - Inspect .github/workflows/ci.yml for setup-node version drift.
+          - Update the workflow to the supported Node.js version and rerun tests.
+        tags:
+          - ci
+          - node
+          - github-actions
+      - id: backend-database-timeout
+        title: Backend database timeout
+        summary: Backend health can degrade when database connection settings are too aggressive.
+        steps:
+          - Check recent deploys and CI state before making code changes.
+          - Inspect database pool timeout and retry settings.
+          - Validate changes locally before creating a draft PR.
+        tags:
+          - timeout
+          - database
+          - pool
+    repositories:
+      - provider: github
+        host: github.com
+        owner: majdoor-demo
+        name: backend
+        default_branch: main
+        url: https://github.com/majdoor-demo/backend
+    environments:
+      prod:
+        runtime:
+          provider: kubernetes
+          namespace: prod
+          workload: backend-api
+        observability:
+          metrics: backend-prod
+          errors: backend-api
+        ci:
+          provider: github_actions
+          workflow: deploy-backend.yml
+      staging:
+        runtime:
+          provider: kubernetes
+          namespace: staging
+          workload: backend-api
+        observability:
+          metrics: backend-staging
+          errors: backend-api-staging
+        ci:
+          provider: github_actions
+          workflow: deploy-backend-staging.yml
+    runbooks:
+      - docs/backend-oncall.md
+      - docs/ci-node-version.md
+    dependencies:
+      - postgres-main
+      - redis-cache
+health:
+  backend:prod:
+    status: degraded
+    summary: Demo backend has elevated health-check latency.
+    checked_at: "2026-07-14T00:00:00Z"
+    signals:
+      - name: latency_p95_ms
+        value: 1250
+        status: warning
+incidents:
+  - service_id: backend
+    environment: prod
+    title: CI failed after Node.js version drift
+    summary: A previous backend PR failed because GitHub Actions used Node.js 18 while the repo required Node.js 20.
+    root_cause: CI workflow runtime drifted from package engine requirements.
+    resolution: Updated setup-node to node-version 20 and reran CI.
+    tags:
+      - ci
+      - node
+      - github-actions
