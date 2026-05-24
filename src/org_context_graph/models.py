@@ -9,6 +9,15 @@ class HealthResponse(BaseModel):
     status: str
 
 
+class ReadinessResponse(BaseModel):
+    status: str
+    org_id: str
+    service_count: int
+    warning_count: int
+    checks: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class CatalogIngestRequest(BaseModel):
     org_id: str
     services: list[dict[str, Any]]

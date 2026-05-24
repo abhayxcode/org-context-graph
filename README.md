@@ -44,6 +44,7 @@ The demo catalog also has a YAML source at `examples/demo-service-catalog.yaml`.
 ## APIs
 
 - `GET /healthz`
+- `GET /v1/readiness`
 - `GET /v1/catalog/validation`
 - `GET /v1/resolve?q=backend&environment=prod`
 - `GET /v1/search?q=oncall&type=runbook`
@@ -94,6 +95,8 @@ Resolved responses include `tool_context`:
 Catalogs are validated at load time. Invalid catalog data fails fast for missing org IDs, duplicate service IDs, malformed teams, missing owners/repos, unsupported repository providers, missing environments, and non-normalized environment names.
 
 Non-blocking validation warnings are available through `GET /v1/catalog/validation` and catalog ingest responses. Warnings identify incomplete optional context such as missing runbooks, playbooks, test commands, channels, observability, CI metadata, or team metadata.
+
+`GET /v1/readiness` returns a lightweight startup/demo preflight signal: catalog loaded, service count, warning count, and non-secret validation warnings.
 
 ## Test
 

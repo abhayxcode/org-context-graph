@@ -23,6 +23,7 @@ from org_context_graph.models import (
     IncidentIngestRequest,
     IncidentIngestResponse,
     OwnerResponse,
+    ReadinessResponse,
     RepoIngestRequest,
     RepoIngestResponse,
     RepoContextResponse,
@@ -49,6 +50,17 @@ class ApiTest(unittest.TestCase):
 
         self.assertEqual(route.response_model, HealthResponse)
         self.assertEqual(body, {"status": "ok"})
+
+    def test_readiness(self) -> None:
+        route = _route(self.app, "/v1/readiness")
+        body = _serialized_response(route, route.endpoint())
+
+        self.assertEqual(route.response_model, ReadinessResponse)
+        self.assertEqual(body["status"], "ok")
+        self.assertEqual(body["org_id"], "default")
+        self.assertEqual(body["service_count"], 1)
+        self.assertEqual(body["warning_count"], 0)
+        self.assertEqual(body["checks"]["catalog_loaded"], True)
 
     def test_catalog_validation(self) -> None:
         route = _route(self.app, "/v1/catalog/validation")
@@ -526,6 +538,7 @@ environments:
         self.assertIn("IncidentIngestRequest", schema["components"]["schemas"])
         self.assertIn("IncidentIngestResponse", schema["components"]["schemas"])
         self.assertIn("OwnerResponse", schema["components"]["schemas"])
+        self.assertIn("ReadinessResponse", schema["components"]["schemas"])
         self.assertIn("RepoIngestRequest", schema["components"]["schemas"])
         self.assertIn("RepoIngestResponse", schema["components"]["schemas"])
         self.assertIn("RepoContextResponse", schema["components"]["schemas"])

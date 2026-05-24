@@ -20,6 +20,7 @@ from org_context_graph.models import (
     IncidentIngestRequest,
     IncidentIngestResponse,
     OwnerResponse,
+    ReadinessResponse,
     RepoIngestRequest,
     RepoIngestResponse,
     RepoContextResponse,
@@ -53,6 +54,23 @@ def create_app(
     @app.get("/healthz", response_model=HealthResponse)
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/v1/readiness", response_model=ReadinessResponse)
+    def readiness(org_id: str = "default") -> dict[str, object]:
+        if org_id != catalog.org_id:
+            raise HTTPException(status_code=404, detail="catalog not found")
+        warnings = catalog.validation_warnings()
+        return {
+            "status": "ok" if not warnings else "warning",
+            "org_id": catalog.org_id,
+            "service_count": len(catalog.services()),
+            "warning_count": len(warnings),
+            "checks": {
+                "catalog_loaded": True,
+                "service_catalog_valid": True,
+            },
+            "warnings": warnings,
+        }
 
     @app.get(
         "/v1/catalog/validation",
