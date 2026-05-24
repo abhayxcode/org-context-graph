@@ -202,6 +202,42 @@ class ServiceCatalogTest(unittest.TestCase):
         self.assertEqual(health["status"], "unknown")
         self.assertEqual(health["summary"], "No cached health snapshot is available.")
 
+    def test_get_health_summary_normalizes_static_snapshot(self) -> None:
+        catalog = ServiceCatalog({
+            "org_id": "default",
+            "services": [_valid_service("backend")],
+            "health": {
+                "backend:prod": {
+                    "status": "degraded",
+                    "summary": "Latency is elevated.",
+                    "checked_at": "2026-07-15T00:00:00Z",
+                    "signals": [
+                        {
+                            "name": "latency_p95_ms",
+                            "value": 1250,
+                            "status": "warning",
+                        }
+                    ],
+                }
+            },
+        })
+
+        health = catalog.get_health_summary(
+            org_id="default",
+            service_id="backend",
+            environment="production",
+        )
+
+        assert health is not None
+        self.assertEqual(health["service_id"], "backend")
+        self.assertEqual(health["environment"], "prod")
+        self.assertEqual(health["signals"], {
+            "latency_p95_ms": {
+                "value": 1250,
+                "status": "warning",
+            }
+        })
+
     def test_ingest_health_snapshot_rejects_unknown_environment(self) -> None:
         with self.assertRaisesRegex(CatalogValidationError, "has no 'qa' environment"):
             self.catalog.ingest_health_snapshot({

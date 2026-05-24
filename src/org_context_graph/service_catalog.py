@@ -166,7 +166,7 @@ class ServiceCatalog:
         normalized_snapshot["service_id"] = service_id
         normalized_snapshot["environment"] = environment
         normalized_snapshot.setdefault("summary", "")
-        normalized_snapshot.setdefault("signals", {})
+        normalized_snapshot["signals"] = _normalize_health_signals(normalized_snapshot.get("signals"))
         self.catalog.setdefault("health", {})[_health_key(service_id, environment)] = normalized_snapshot
         return normalized_snapshot
 
@@ -186,9 +186,16 @@ class ServiceCatalog:
 
         snapshot = self.health_snapshots().get(_health_key(service_id, normalized_environment))
         if snapshot:
+            normalized_snapshot = dict(snapshot)
+            normalized_snapshot.setdefault("service_id", service_id)
+            normalized_snapshot.setdefault("environment", normalized_environment)
+            normalized_snapshot.setdefault("summary", "")
+            normalized_snapshot.setdefault("checked_at", None)
+            normalized_snapshot.setdefault("source", None)
+            normalized_snapshot["signals"] = _normalize_health_signals(normalized_snapshot.get("signals"))
             return {
                 "org_id": self.org_id,
-                **snapshot,
+                **normalized_snapshot,
             }
         return {
             "org_id": self.org_id,
@@ -658,6 +665,25 @@ def _dependency_target(dependency: Any) -> str:
 
 def _health_key(service_id: str, environment: str) -> str:
     return f"{service_id}:{environment}"
+
+
+def _normalize_health_signals(signals: Any) -> dict[str, Any]:
+    if isinstance(signals, dict):
+        return signals
+    if isinstance(signals, list):
+        normalized: dict[str, Any] = {}
+        for index, signal in enumerate(signals):
+            if isinstance(signal, dict):
+                name = str(signal.get("name") or f"signal_{index}")
+                normalized[name] = {
+                    key: value
+                    for key, value in signal.items()
+                    if key != "name"
+                }
+            else:
+                normalized[f"signal_{index}"] = signal
+        return normalized
+    return {}
 
 
 def _infer_dependency_kind(target: str) -> str:

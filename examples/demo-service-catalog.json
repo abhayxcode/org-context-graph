@@ -93,16 +93,17 @@
   ],
   "health": {
     "backend:prod": {
+      "service_id": "backend",
+      "environment": "prod",
       "status": "degraded",
       "summary": "Demo backend has elevated health-check latency.",
       "checked_at": "2026-07-14T00:00:00Z",
-      "signals": [
-        {
-          "name": "latency_p95_ms",
+      "signals": {
+        "latency_p95_ms": {
           "value": 1250,
           "status": "warning"
         }
-      ]
+      }
     }
   },
   "incidents": [
