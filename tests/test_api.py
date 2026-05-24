@@ -89,6 +89,14 @@ class ApiTest(unittest.TestCase):
             body["tool_context"]["tool_arguments"]["code_host.get_recent_changes"],
             {"repository": "acme/backend", "branch": "main"},
         )
+        self.assertEqual(
+            body["tool_context"]["tool_arguments"]["docs.search_runbooks"],
+            {
+                "repository": "acme/backend",
+                "ref": "main",
+                "runbooks": ["docs/backend-oncall.md"],
+            },
+        )
 
     def test_resolve_not_found_keeps_sparse_shape(self) -> None:
         route = _route(self.app, "/v1/resolve")

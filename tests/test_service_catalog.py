@@ -83,6 +83,14 @@ class ServiceCatalogTest(unittest.TestCase):
             tool_arguments["metrics.get_service_health"],
             {"target": "backend-prod"},
         )
+        self.assertEqual(
+            tool_arguments["docs.search_runbooks"],
+            {
+                "repository": "acme/backend",
+                "ref": "main",
+                "runbooks": ["docs/backend-oncall.md"],
+            },
+        )
 
     def test_tool_context_contains_pr_metadata(self) -> None:
         result = self.catalog.resolve(org_id="default", query="backend", environment="prod")

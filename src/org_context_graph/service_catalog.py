@@ -1012,6 +1012,8 @@ def build_tool_context(
                 "project": observability.get("errors"),
             }),
             "docs.search_runbooks": _without_empty({
+                "repository": repository_name,
+                "ref": repository.get("default_branch"),
                 "runbooks": service.get("runbooks", []),
             }),
         },
